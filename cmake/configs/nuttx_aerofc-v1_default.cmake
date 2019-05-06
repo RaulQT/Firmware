@@ -68,4 +68,7 @@ set(config_module_list
 	# Library modules
 	#
 	modules/dataman
+
+        #UTD Reference Monitor module
+        modules/dataFusion
 )

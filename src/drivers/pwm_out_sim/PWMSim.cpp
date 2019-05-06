@@ -30,7 +30,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  *
  ****************************************************************************/
-
+#include "modules/dataFusion/functions.h"    //UTD EKF prototype
 #include "PWMSim.hpp"
 
 PWMSim::PWMSim() :
@@ -287,6 +287,14 @@ PWMSim::run()
 					_actuator_outputs.output[i] = 0.0;
 				}
 			}
+
+                        //UTD call to EKF
+                        double actuatorControls[4];
+                        actuatorControls[0] = _actuator_outputs.output[0];
+                        actuatorControls[1] = _actuator_outputs.output[1];
+                        actuatorControls[2] = _actuator_outputs.output[2];
+                        actuatorControls[3] = _actuator_outputs.output[3];
+                        EKF_CALL(actuatorControls);
 
 			/* and publish for anyone that cares to see */
 			_actuator_outputs.timestamp = hrt_absolute_time();
