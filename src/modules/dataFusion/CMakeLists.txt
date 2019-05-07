@@ -34,7 +34,8 @@
 px4_add_module(
 	MODULE modules__referenceMonitor
 	MAIN referenceMonitor
-	STACK_MAIN 18000
+	STACK_MAX  18000
+	STACK_MAIN 2000
 	SRCS
 		EKF.cpp
                 referenceMonitor.cpp
