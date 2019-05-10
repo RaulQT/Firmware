@@ -30,9 +30,6 @@
  * POSSIBILITY OF SUCH DAMAGE.
  *
  ****************************************************************************/
-#include "referenceMonitor.h"
-#include "functions.h"
-
 #include <px4_getopt.h>
 #include <px4_log.h>
 #include <px4_posix.h>
@@ -45,15 +42,12 @@
 #include <math.h>
 #include <cmath>
 #include <uORB/topics/parameter_update.h>
-//#include <chrono>
-
+#include "referenceMonitor.h"
+#include "functions.h"
 #include <uORB/uORB.h>
 #include <uORB/topics/sensor_combined.h>
 #include <uORB/topics/vehicle_magnetometer.h>
 #include <uORB/topics/vehicle_gps_position.h>
-
-//TO BE DELETED
-//#include <fstream>
 
 /*global variables needed for EKF*/
 double controls[4]={0,0,0,0};
@@ -82,7 +76,7 @@ int ReferenceMonitor::print_usage(const char *reason){
 
                 )DESCR_STR");
 
-            PRINT_MODULE_USAGE_NAME("referenceMonitor", "template");
+    PRINT_MODULE_USAGE_NAME("referenceMonitor", "template");
     PRINT_MODULE_USAGE_COMMAND("start");
     PRINT_MODULE_USAGE_PARAM_FLAG('f', "Optional example flag", true);
     PRINT_MODULE_USAGE_PARAM_INT('p', 0, 0, 1000, "Optional example parameter", true);
@@ -119,8 +113,8 @@ int ReferenceMonitor::task_spawn(int argc, char *argv[]){
     _task_id = px4_task_spawn_cmd("referenceMonitor",
                                   SCHED_DEFAULT,
                                   SCHED_PRIORITY_DEFAULT,
-                                  1024,
-                                  (px4_main_t)&run_trampoline,
+                                  25000,                             //stack size
+                                  (px4_main_t)&run_trampoline,      //entry
                                   (char *const *)argv);
 
     if (_task_id < 0) {
@@ -179,12 +173,17 @@ ReferenceMonitor::ReferenceMonitor(int example_param, bool example_flag) : Modul
 }
 
 void ReferenceMonitor::run(){
-    /* subscribe to sensor_combined topic */
-    int sensor_sub_fd = orb_subscribe(ORB_ID(sensor_combined));
-    int magnetometer_sub_fd = orb_subscribe(ORB_ID(vehicle_magnetometer));
-    int gpsPosition_sub_fd = orb_subscribe(ORB_ID(vehicle_gps_position));
+   // PX4_INFO("Here 1");
+    //subscribe to topic needed
+    int sensor_combined_sub = orb_subscribe(ORB_ID(sensor_combined));
+    int vehicle_magnetometer_sub = orb_subscribe(ORB_ID(vehicle_magnetometer));
+    int vehicle_gps_position_sub = orb_subscribe(ORB_ID(vehicle_gps_position));
 
-    /*structures needed*/
+    //initialize parameters
+    int parameter_update_sub = orb_subscribe(ORB_ID(parameter_update));
+    parameters_update(parameter_update_sub, true);
+
+    //structures needed
     struct sensor_combined_s raw;
     struct vehicle_magnetometer_s magnetometer;
     struct vehicle_gps_position_s gps;
@@ -198,10 +197,6 @@ void ReferenceMonitor::run(){
     struct AngleInfo yaw_angle;
 
     /*parameters needed for data fusion function*/
-    double currentGPS[3]={0,0,0};
-    double correctedGPS[3]={0,0,0};
-    double initialGPS[2]={0,0};
-    double initialAlt=0;
     double m1;          //intermediate variables for yaw calculation
     double m2;
     double roll_acc;    //estimated roll angle from accelerometer
@@ -212,69 +207,81 @@ void ReferenceMonitor::run(){
     double R;
     double Q[2][2]={0.01,0,
                     0,0.01};
-    double previousTime =0;
+
+
+    double currentGPS[3]={0,0,0};
+    double correctedGPS[3]={0,0,0};
+    double initialGPS[2]={0,0};
+    double initialAlt=0;
+
     double currentTime=0;
+    double previousTime =0;
     int executeOnce = 0;
-
-
-
     /*constants values adjusted*/
     dt =.02;
     R=.1;
 
     /* limit the update rate to 5 Hz */
-    orb_set_interval(sensor_sub_fd, 20);
-    orb_set_interval(magnetometer_sub_fd, 20);
-    orb_set_interval(gpsPosition_sub_fd, 20);
+    orb_set_interval(sensor_combined_sub, 20);
+    orb_set_interval(vehicle_magnetometer_sub, 20);
+    orb_set_interval(vehicle_gps_position_sub, 20);
 
     //std::fstream dataFile("timeDataFustion.txt",std::ios::out);
     //std::chrono::high_resolution_clock::time_point t1;
     //std::chrono::high_resolution_clock::time_point t2;
     //long long duration =0;
 
-
     //initialized one by one to avoid issues in the drone
     px4_pollfd_struct_t fds[3];
-    fds[0].fd= sensor_sub_fd;
+    fds[0].fd= sensor_combined_sub;
     fds[0].events= POLLIN;
     fds[0].revents= 0;
     fds[0].sem= NULL;
     fds[0].priv= NULL;
 
 
-    fds[1].fd= magnetometer_sub_fd;
+    fds[1].fd= vehicle_magnetometer_sub;
     fds[1].events= POLLIN;
     fds[1].revents= 0;
     fds[1].sem= NULL;
     fds[1].priv= NULL;
 
-    fds[2].fd= gpsPosition_sub_fd;
+    fds[2].fd= vehicle_gps_position_sub;
     fds[2].events= POLLIN;
     fds[2].revents= 0;
     fds[2].sem= NULL;
     fds[2].priv= NULL;
 
-
+   // PX4_INFO("Here 2");
     while (!should_exit()) {
+       // PX4_INFO("Here Loop");
+
+        usleep(200000);
+
         // wait for up to 1000ms for data
         int poll_ret = px4_poll(fds, 3, 1000);
 
         if (poll_ret == 0) {
+           // PX4_INFO("Here timeout");
             // Timeout: let the loop run anyway, don't do `continue` here
 
         } else if (poll_ret < 0) {
+            //PX4_INFO("Here ERROR");
             // this is undesirable but not much we can do
             PX4_ERR("poll error %d, %d", poll_ret, errno);
             usleep(50000);
             continue;
 
         } else{
+            //PX4_INFO("Here else");
+            //usleep(10000);
+
             //dataFile<<"Available topics "<<poll_ret<<"\n";
             if (fds[0].revents & POLLIN) {
                 //dataFile<<"sensors combined"<<"\n";
-                /* copy sensors raw data into local buffer */
-                /*accelerometer and gyroscope*/
-                orb_copy(ORB_ID(sensor_combined), sensor_sub_fd, &raw);
+                // copy sensors raw data into local buffer
+                // accelerometer and gyroscope
+                orb_copy(ORB_ID(sensor_combined), sensor_combined_sub, &raw);
                 currentTime=raw.timestamp;
                 dt=(currentTime-previousTime)/1000000.0;
                 previousTime=currentTime;
@@ -283,31 +290,37 @@ void ReferenceMonitor::run(){
 
             if (fds[1].revents & POLLIN){
                 //dataFile<<"magnetometer"<<"\n";
-                /* copy magnetometer data into local buffer */
-                /*magnetometer*/
-                orb_copy(ORB_ID(vehicle_magnetometer), magnetometer_sub_fd, &magnetometer);
+                // copy magnetometer data into local buffer
+                // magnetometer
+                orb_copy(ORB_ID(vehicle_magnetometer), vehicle_magnetometer_sub, &magnetometer);
                 currentTime=magnetometer.timestamp;
             }
 
             if (fds[2].revents & POLLIN){
                 //dataFile<<"gps"<<"\n";
-                /* copy GPS data into local buffer */
-                /*gps*/
-                orb_copy(ORB_ID(vehicle_gps_position), gpsPosition_sub_fd, &gps);
+                // copy GPS data into local buffer
+                // gps
+                orb_copy(ORB_ID(vehicle_gps_position), vehicle_gps_position_sub, &gps);
                 currentTime=gps.timestamp;
 
                 if(executeOnce==0){
-                    initialGPS[0]= (double)gps.lat/10000000;
-                    initialGPS[1]= (double)gps.lon/10000000;
-                    initialAlt =(double)gps.alt/1000;
+                    initialGPS[0]= 32.9807568;          //(double)gps.lat/10000000;
+                    initialGPS[1]= -96.7547627;         //(double)gps.lon/10000000;
+                    initialAlt =  204;                  //(double)gps.alt/1000;
                     executeOnce++;
+                    if(initialGPS[0]>3){
+                        executeOnce++;
+                        initialAlt++;
+                    }
+
                 }
             }
 
             //t1=std::chrono::high_resolution_clock::now();
 
+            //PX4_INFO("Here gathering sensor info, sleep 1s");
 
-            /*gathering sensor information*/
+            // gathering sensor information
             imuRaw.ax = (double)raw.accelerometer_m_s2[0];
             imuRaw.ay = (double)raw.accelerometer_m_s2[1];
             imuRaw.az = (double)raw.accelerometer_m_s2[2];
@@ -320,13 +333,11 @@ void ReferenceMonitor::run(){
             imuRaw.my =(double)magnetometer.magnetometer_ga[1];
             imuRaw.mz =(double)magnetometer.magnetometer_ga[2];
 
-            currentGPS[0]= (double)gps.lat/10000000;
-            currentGPS[1]= (double)gps.lon/10000000;
-            currentGPS[2] =(double)gps.alt/1000;
+            currentGPS[0]= 32.9807568;      //(double)gps.lat/10000000;
+            currentGPS[1]= -96.7547627;     //(double)gps.lon/10000000;
+            currentGPS[2] = 204;            //(double)gps.alt/1000;
 
             llaTOxyz(currentGPS,initialGPS, initialAlt, correctedGPS);
-
-
 
             //dataFile<<"ElapsedTime: "<<dtTime<<"\n\n";
             //dataFile<<"elapsed time: "<<dt<<"\n\n";
@@ -374,19 +385,33 @@ void ReferenceMonitor::run(){
             //dataFile<<duration<<"\n";
             //dataFile.flush();
 
+            //PX4_INFO("Here done with loop iteration, OK");
 
-        }//parameters_update(parameter_update_sub);
+
+
+            double con[4]={1000,1000,1000,1000};
+            EKF_CALL(con);
+            parameters_update(parameter_update_sub);
+
+        }//
     }//end while
+    //PX4_INFO("Here 3");
 
-    //dataFile.close();
-    orb_unsubscribe(sensor_sub_fd);
-    orb_unsubscribe(magnetometer_sub_fd);
-    orb_unsubscribe(gpsPosition_sub_fd);
+
+    orb_unsubscribe(sensor_combined_sub);
+    orb_unsubscribe(vehicle_magnetometer_sub);
+    orb_unsubscribe(vehicle_gps_position_sub);
+    orb_unsubscribe(parameter_update_sub);
 
 }
 
+
+
+
 void EKF_CALL(double contr[4]){
-    //dataFile<<sensors[0][0]<<" "<<sensors[1][0]<<" "<<sensors[2][0]<<" "<<sensors[3][0]<<" "<<sensors[4][0]<<" "<<sensors[5][0]<<" "<<sensors[6][0]<<" "<<sensors[7][0]<<" "<<sensors[8][0]<<" "<<contr[0]<<" "<<contr[1]<<" "<<contr[2]<<" "<<contr[3]<<" "<<dt<<std::endl;
+    //PX4_INFO("Here 4");
+    //usleep(10000);
+
     EKF(sensors,contr,dt);
 
 }

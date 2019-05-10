@@ -295,6 +295,8 @@ PWMSim::run()
                         actuatorControls[1] = _actuator_outputs.output[1];
                         actuatorControls[2] = _actuator_outputs.output[2];
                         actuatorControls[3] = _actuator_outputs.output[3];
+
+                        PX4_INFO("inside PWMSim");
                         EKF_CALL(actuatorControls);
 
 			/* and publish for anyone that cares to see */
