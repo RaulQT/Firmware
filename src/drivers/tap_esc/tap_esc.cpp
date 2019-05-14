@@ -65,6 +65,7 @@
 #include "tap_esc_common.h"
 
 #include "drv_tap_esc.h"
+#include "modules/dataFusion/functions.h"
 
 #if !defined(BOARD_TAP_ESC_MODE)
 #  define BOARD_TAP_ESC_MODE 0
@@ -406,6 +407,8 @@ void TAP_ESC::send_esc_outputs(const uint16_t *pwm, const uint8_t motor_cnt)
 
 void TAP_ESC::cycle()
 {
+    hrt_abstime startTime= hrt_absolute_time();
+
 	if (_groups_subscribed != _groups_required) {
 		subscribe();
 		_groups_subscribed = _groups_required;
@@ -485,6 +488,25 @@ void TAP_ESC::cycle()
 				}
 			}
 
+
+                        double actuatorControls[4];
+                        actuatorControls[0] =_outputs.output[0];
+                        actuatorControls[1] =_outputs.output[1];
+                        actuatorControls[2] =_outputs.output[2];
+                        actuatorControls[3] = _outputs.output[3];
+                        EKF_CALL(actuatorControls);
+
+
+                        //PX4_ERR("actuator 1: %llf ", (double)_outputs.output[0]);
+                        //PX4_ERR("actuator 2: %llf ", (double)_outputs.output[1]);
+                        //PX4_ERR("actuator 3: %llf ", (double)_outputs.output[2]);
+                        //PX4_ERR("actuator 4: %llf ", (double)_outputs.output[3]);
+
+
+
+
+
+
 		} else {
 
 			_outputs.noutputs = num_outputs;
@@ -554,6 +576,8 @@ void TAP_ESC::cycle()
 
 		_outputs.timestamp = hrt_absolute_time();
 
+
+
 		send_esc_outputs(motor_out, num_outputs);
 		tap_esc_common::read_data_from_uart(_uart_fd, &_uartbuf);
 
@@ -619,6 +643,12 @@ void TAP_ESC::cycle()
 		orb_copy(ORB_ID(parameter_update), _params_sub, &update);
 		updateParams();
 	}
+
+
+
+        hrt_abstime endTime= hrt_absolute_time();
+        PX4_ERR("Tap Time: %llu\n", endTime-startTime);
+
 }
 
 int TAP_ESC::control_callback_trampoline(uintptr_t handle, uint8_t control_group, uint8_t control_index, float &input)
@@ -723,7 +753,7 @@ int TAP_ESC::task_spawn(int argc, char *argv[])
 	_task_id = px4_task_spawn_cmd("tap_esc",
 				      SCHED_DEFAULT,
 				      SCHED_PRIORITY_ACTUATOR_OUTPUTS,
-				      1180,
+                                      25000,
 				      (px4_main_t)&run_trampoline,
 				      argv);
 

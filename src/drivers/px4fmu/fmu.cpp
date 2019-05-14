@@ -1207,7 +1207,8 @@ PX4FMU::run()
 void
 PX4FMU::cycle()
 {
-	while (true) {
+    PX4_INFO("Inside of fmu");
+        while (true) {
 
 		if (_groups_subscribed != _groups_required) {
 			subscribe();
@@ -1218,7 +1219,7 @@ PX4FMU::cycle()
 
 		int poll_timeout = 5; // needs to be small enough so that we don't miss RC input data
 
-		if (!_run_as_task) {
+                if (!_run_as_task) {
 			/*
 			 * Adjust actuator topic update rate to keep up with
 			 * the highest servo update rate configured.
@@ -1269,7 +1270,7 @@ PX4FMU::cycle()
 			/* timeout: no control data, switch to failsafe values */
 			//			PX4_WARN("no PWM: failsafe");
 
-		} else {
+                } else {
 			if (_mixers != nullptr) {
 				/* get controls for required topics */
 				unsigned poll_id = 0;
@@ -1305,7 +1306,7 @@ PX4FMU::cycle()
 		} // poll_fds
 
 		/* run the mixers on every cycle */
-		{
+                {
 			if (_mixers != nullptr) {
 
 				if (_mot_t_max > FLT_EPSILON) {
@@ -1379,6 +1380,14 @@ PX4FMU::cycle()
 				for (size_t i = 0; i < mixed_num_outputs; ++i) {
 					actuator_outputs.output[i] = pwm_limited[i];
 				}
+                                PX4_INFO("Output to servos 1");
+                                  PX4_INFO("1: %f",(double)actuator_outputs.output[0]);
+                                  PX4_INFO("2: %f",(double)actuator_outputs.output[1]);
+                                  PX4_INFO("3: %f",(double)actuator_outputs.output[2]);
+                                  PX4_INFO("4: %f",(double)actuator_outputs.output[3]);
+
+
+
 
 				orb_publish_auto(ORB_ID(actuator_outputs), &_outputs_pub, &actuator_outputs, &_class_instance, ORB_PRIO_DEFAULT);
 
@@ -1458,7 +1467,7 @@ PX4FMU::cycle()
 		bool updated = false;
 		orb_check(_armed_sub, &updated);
 
-		if (updated) {
+                if (updated) {
 			orb_copy(ORB_ID(actuator_armed), _armed_sub, &_armed);
 
 			/* Update the armed status and check that we're not locked down.

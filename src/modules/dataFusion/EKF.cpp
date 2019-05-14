@@ -12,6 +12,7 @@
 #include <cmath>
 #include <stdio.h>
 #include <px4_log.h>
+#include <drivers/drv_hrt.h>
 void llaTOxyz(double lla[3],double ll0[2],double alt, double * array){
 
    // PX4_INFO("inside of llatoxyz");
@@ -151,6 +152,8 @@ void updateP(double Pdot[12][12],double P[12][12],double dt){
 
 
 void EKF(double sensors[9][1], double controls[4],double dt){
+
+    hrt_abstime startTime= hrt_absolute_time();
     //PX4_INFO("Here 6");
     //usleep(10000);
     //static variables
@@ -336,6 +339,11 @@ void EKF(double sensors[9][1], double controls[4],double dt){
         estimated_states[8][0]=0;
     if((estimated_states[8][0]<=0) && (estimated_states[11][0]<=0))
         estimated_states[11][0]=0;
+
+
+
+    hrt_abstime endTime= hrt_absolute_time();
+    PX4_ERR("EKF time: %llu\n", endTime-startTime);
 
     //PX4_INFO("Here 13");
     //usleep(10000);

@@ -48,6 +48,7 @@
 #include <uORB/topics/sensor_combined.h>
 #include <uORB/topics/vehicle_magnetometer.h>
 #include <uORB/topics/vehicle_gps_position.h>
+#include <drivers/drv_hrt.h>
 
 /*global variables needed for EKF*/
 double controls[4]={0,0,0,0};
@@ -113,7 +114,7 @@ int ReferenceMonitor::task_spawn(int argc, char *argv[]){
     _task_id = px4_task_spawn_cmd("referenceMonitor",
                                   SCHED_DEFAULT,
                                   SCHED_PRIORITY_DEFAULT,
-                                  25000,                             //stack size
+                                  5000,                             //stack size
                                   (px4_main_t)&run_trampoline,      //entry
                                   (char *const *)argv);
 
@@ -221,10 +222,14 @@ void ReferenceMonitor::run(){
     dt =.02;
     R=.1;
 
+    //time measurements
+    hrt_abstime startTimeDF;
+    hrt_abstime endTimeDF;
+
     /* limit the update rate to 5 Hz */
-    orb_set_interval(sensor_combined_sub, 20);
-    orb_set_interval(vehicle_magnetometer_sub, 20);
-    orb_set_interval(vehicle_gps_position_sub, 20);
+    orb_set_interval(sensor_combined_sub, 200);
+    orb_set_interval(vehicle_magnetometer_sub, 200);
+    orb_set_interval(vehicle_gps_position_sub, 200);
 
     //std::fstream dataFile("timeDataFustion.txt",std::ios::out);
     //std::chrono::high_resolution_clock::time_point t1;
@@ -254,16 +259,20 @@ void ReferenceMonitor::run(){
 
    // PX4_INFO("Here 2");
     while (!should_exit()) {
-       // PX4_INFO("Here Loop");
+       //PX4_INFO("ReferenceMonitor");
 
-        usleep(200000);
+       usleep(200000);
+
+
 
         // wait for up to 1000ms for data
         int poll_ret = px4_poll(fds, 3, 1000);
+startTimeDF= hrt_absolute_time();
 
         if (poll_ret == 0) {
            // PX4_INFO("Here timeout");
             // Timeout: let the loop run anyway, don't do `continue` here
+            continue;
 
         } else if (poll_ret < 0) {
             //PX4_INFO("Here ERROR");
@@ -273,11 +282,14 @@ void ReferenceMonitor::run(){
             continue;
 
         } else{
+
+
             //PX4_INFO("Here else");
             //usleep(10000);
 
             //dataFile<<"Available topics "<<poll_ret<<"\n";
             if (fds[0].revents & POLLIN) {
+                //PX4_INFO("sensors combined executes: %llu us",hrt_absolute_time());
                 //dataFile<<"sensors combined"<<"\n";
                 // copy sensors raw data into local buffer
                 // accelerometer and gyroscope
@@ -289,6 +301,7 @@ void ReferenceMonitor::run(){
 
 
             if (fds[1].revents & POLLIN){
+                //PX4_INFO("magnetometer executes: %llu us",hrt_absolute_time());
                 //dataFile<<"magnetometer"<<"\n";
                 // copy magnetometer data into local buffer
                 // magnetometer
@@ -297,6 +310,7 @@ void ReferenceMonitor::run(){
             }
 
             if (fds[2].revents & POLLIN){
+                //PX4_INFO("GPS executes: %llu us",hrt_absolute_time());
                 //dataFile<<"gps"<<"\n";
                 // copy GPS data into local buffer
                 // gps
@@ -316,7 +330,7 @@ void ReferenceMonitor::run(){
                 }
             }
 
-            //t1=std::chrono::high_resolution_clock::now();
+
 
             //PX4_INFO("Here gathering sensor info, sleep 1s");
 
@@ -338,10 +352,6 @@ void ReferenceMonitor::run(){
             currentGPS[2] = 204;            //(double)gps.alt/1000;
 
             llaTOxyz(currentGPS,initialGPS, initialAlt, correctedGPS);
-
-            //dataFile<<"ElapsedTime: "<<dtTime<<"\n\n";
-            //dataFile<<"elapsed time: "<<dt<<"\n\n";
-            //dataFile.flush();
 
             //Roll angle
             roll_acc=atan(imuRaw.ay/imuRaw.az);
@@ -374,28 +384,18 @@ void ReferenceMonitor::run(){
             sensors[8][0]=correctedGPS[2];
 
 
-            //t2=std::chrono::high_resolution_clock::now();
-            //duration = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1).count();
-            //if(duration==0){
-
-            //}
-            //dataFile<<sensors[0][0]<<" "<<sensors[1][0]<<" "<<sensors[2][0]<<" "<<sensors[3][0]<<" "<<sensors[4][0]<<" "<<sensors[5][0]<<" "<<sensors[6][0]<<" "<<sensors[7][0]<<" "<<sensors[8][0]<<" "<<dt<<" "<< duration<<std::endl;
-
-
-            //dataFile<<duration<<"\n";
-            //dataFile.flush();
-
-            //PX4_INFO("Here done with loop iteration, OK");
 
 
 
-            double con[4]={1000,1000,1000,1000};
-            EKF_CALL(con);
+            endTimeDF = hrt_absolute_time();
+            PX4_ERR("DF time: %llu us", endTimeDF-startTimeDF);
+
             parameters_update(parameter_update_sub);
 
-        }//
+        }//end else
+
+
     }//end while
-    //PX4_INFO("Here 3");
 
 
     orb_unsubscribe(sensor_combined_sub);
@@ -409,11 +409,7 @@ void ReferenceMonitor::run(){
 
 
 void EKF_CALL(double contr[4]){
-    //PX4_INFO("Here 4");
-    //usleep(10000);
-
     EKF(sensors,contr,dt);
-
 }
 
 void ReferenceMonitor::parameters_update(int parameter_update_sub, bool force){
