@@ -48,12 +48,14 @@
 #include <uORB/topics/sensor_combined.h>
 #include <uORB/topics/vehicle_magnetometer.h>
 #include <uORB/topics/vehicle_gps_position.h>
+#include <uORB/topics/actuator_outputs.h>
 #include <drivers/drv_hrt.h>
 
 /*global variables needed for EKF*/
-double controls[4]={0,0,0,0};
+double controls[4]={1000,1000,1000,1000};
 double sensors[9][1]={0,0,0,0,0,0,0,0,0};
 double dt=0;
+
 
 
 int ReferenceMonitor::print_usage(const char *reason){
@@ -114,7 +116,7 @@ int ReferenceMonitor::task_spawn(int argc, char *argv[]){
     _task_id = px4_task_spawn_cmd("referenceMonitor",
                                   SCHED_DEFAULT,
                                   SCHED_PRIORITY_DEFAULT,
-                                  5000,                             //stack size
+                                  25000,                             //stack size
                                   (px4_main_t)&run_trampoline,      //entry
                                   (char *const *)argv);
 
@@ -179,6 +181,7 @@ void ReferenceMonitor::run(){
     int sensor_combined_sub = orb_subscribe(ORB_ID(sensor_combined));
     int vehicle_magnetometer_sub = orb_subscribe(ORB_ID(vehicle_magnetometer));
     int vehicle_gps_position_sub = orb_subscribe(ORB_ID(vehicle_gps_position));
+    int actuator_outputs_sub = orb_subscribe(ORB_ID(actuator_outputs));
 
     //initialize parameters
     int parameter_update_sub = orb_subscribe(ORB_ID(parameter_update));
@@ -188,9 +191,8 @@ void ReferenceMonitor::run(){
     struct sensor_combined_s raw;
     struct vehicle_magnetometer_s magnetometer;
     struct vehicle_gps_position_s gps;
+    struct actuator_outputs_s actuators;
 
-    //struct vehicle_air_data_s airdata;
-    //struct actuator_outputs_s act;
 
     struct Imu imuRaw;
     struct AngleInfo roll_angle;
@@ -218,8 +220,12 @@ void ReferenceMonitor::run(){
     double currentTime=0;
     double previousTime =0;
     int executeOnce = 0;
+
+
+
+
     /*constants values adjusted*/
-    dt =.02;
+    dt =.2;
     R=.1;
 
     //time measurements
@@ -227,23 +233,19 @@ void ReferenceMonitor::run(){
     hrt_abstime endTimeDF;
 
     /* limit the update rate to 5 Hz */
-    orb_set_interval(sensor_combined_sub, 200);
-    orb_set_interval(vehicle_magnetometer_sub, 200);
-    orb_set_interval(vehicle_gps_position_sub, 200);
+    orb_set_interval(sensor_combined_sub, 20);
+    orb_set_interval(vehicle_magnetometer_sub, 20);
+    orb_set_interval(vehicle_gps_position_sub, 20);
+    orb_set_interval(actuator_outputs_sub, 20);
 
-    //std::fstream dataFile("timeDataFustion.txt",std::ios::out);
-    //std::chrono::high_resolution_clock::time_point t1;
-    //std::chrono::high_resolution_clock::time_point t2;
-    //long long duration =0;
 
     //initialized one by one to avoid issues in the drone
-    px4_pollfd_struct_t fds[3];
+    px4_pollfd_struct_t fds[4];
     fds[0].fd= sensor_combined_sub;
     fds[0].events= POLLIN;
     fds[0].revents= 0;
     fds[0].sem= NULL;
     fds[0].priv= NULL;
-
 
     fds[1].fd= vehicle_magnetometer_sub;
     fds[1].events= POLLIN;
@@ -257,6 +259,13 @@ void ReferenceMonitor::run(){
     fds[2].sem= NULL;
     fds[2].priv= NULL;
 
+    fds[3].fd= actuator_outputs_sub;
+    fds[3].events= POLLIN;
+    fds[3].revents= 0;
+    fds[3].sem= NULL;
+    fds[3].priv= NULL;
+
+
    // PX4_INFO("Here 2");
     while (!should_exit()) {
        //PX4_INFO("ReferenceMonitor");
@@ -266,8 +275,8 @@ void ReferenceMonitor::run(){
 
 
         // wait for up to 1000ms for data
-        int poll_ret = px4_poll(fds, 3, 1000);
-startTimeDF= hrt_absolute_time();
+        int poll_ret = px4_poll(fds, 4, 1000);
+        startTimeDF= hrt_absolute_time();
 
         if (poll_ret == 0) {
            // PX4_INFO("Here timeout");
@@ -332,6 +341,21 @@ startTimeDF= hrt_absolute_time();
 
 
 
+            if (fds[3].revents & POLLIN) {
+                    orb_copy(ORB_ID(actuator_outputs),actuator_outputs_sub, &actuators);
+                            //PX4_INFO("actuator %f", (double)actuators.output[0]);
+                            //PX4_INFO("actuator %f",(double)actuators.output[1]);
+                            //PX4_INFO("actuator %f",(double)actuators.output[2]);
+                            //PX4_INFO("actuator %f",(double)actuators.output[3]);
+                    controls[0]=actuators.output[0];
+                    controls[1]=actuators.output[1];
+                    controls[2]=actuators.output[2];
+                    controls[3]=actuators.output[3];
+            }
+
+
+
+
             //PX4_INFO("Here gathering sensor info, sleep 1s");
 
             // gathering sensor information
@@ -383,12 +407,20 @@ startTimeDF= hrt_absolute_time();
             sensors[7][0]=correctedGPS[1];
             sensors[8][0]=correctedGPS[2];
 
+            controls[0]=actuators.output[0];
+            controls[1]=actuators.output[1];
+            controls[2]=actuators.output[2];
+            controls[3]=actuators.output[3];
 
+
+
+
+            EKF(sensors,controls,dt);
 
 
 
             endTimeDF = hrt_absolute_time();
-            PX4_ERR("DF time: %llu us", endTimeDF-startTimeDF);
+            PX4_ERR("New design time: %llu us", endTimeDF-startTimeDF);
 
             parameters_update(parameter_update_sub);
 
@@ -396,8 +428,6 @@ startTimeDF= hrt_absolute_time();
 
 
     }//end while
-
-
     orb_unsubscribe(sensor_combined_sub);
     orb_unsubscribe(vehicle_magnetometer_sub);
     orb_unsubscribe(vehicle_gps_position_sub);

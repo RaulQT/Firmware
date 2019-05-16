@@ -13,6 +13,8 @@
 #include <stdio.h>
 #include <px4_log.h>
 #include <drivers/drv_hrt.h>
+bool systemCompromised = false;
+
 void llaTOxyz(double lla[3],double ll0[2],double alt, double * array){
 
    // PX4_INFO("inside of llatoxyz");
@@ -48,8 +50,6 @@ void llaTOxyz(double lla[3],double ll0[2],double alt, double * array){
 
 void EKF_Fk(double x[12][1],   double Ix, double Iy, double Iz,  double T, double m,  double kd, double Fk[12][12]){
 
-    //PX4_INFO("Here 9");
-    //usleep(10000);
     double Fk_temp[12][12]={
         x[4][0]*cos(x[0][0])*tan(x[1][0])-x[5][0]*sin(x[0][0])*tan(x[1][0]),x[5][0]*cos(x[0][0])*(pow(tan(x[1][0]),2) + 1)+x[4][0]*sin(x[0][0])*(pow(tan(x[1][0]),2)+ 1),0,1,sin(x[0][0])*tan(x[1][0]),cos(x[0][0])*tan(x[1][0]),0,0,0,0,0,0,
         
@@ -80,8 +80,6 @@ void EKF_Fk(double x[12][1],   double Ix, double Iy, double Iz,  double T, doubl
 
 }
 void EKF_Hk(double Hk[9][12]){
-    //PX4_INFO("Here 10");
-    //usleep(10000);
     for(int i=0;i<9;i++)
         for(int j=0;j<12;j++)
         {
@@ -95,8 +93,6 @@ void EKF_Hk(double Hk[9][12]){
 
 // Rotation matrix
 void eul2rotmat(double angles[3],double rotmatrix[3][3]){
-    //PX4_INFO("Here 11");
-    //usleep(10000);
     double R2[3][3]={cos(angles[1])*cos(angles[2]), sin(angles[0])*sin(angles[1])*cos(angles[2])-cos(angles[0])*sin(angles[2]), cos(angles[0])*sin(angles[1])*cos(angles[2])+sin(angles[0])*sin(angles[2]),
         cos(angles[1])*sin(angles[2]),sin(angles[0])*sin(angles[1])*sin(angles[2])+cos(angles[0])*cos(angles[2]), cos(angles[0])*sin(angles[1])*sin(angles[2])-sin(angles[0])*cos(angles[2]),
         -sin(angles[1]),sin(angles[0])*cos(angles[1]),cos(angles[0])*cos(angles[1])};
@@ -118,9 +114,6 @@ void transforMinv(double angles[3],double Minv_out[3][3]){
 }
 
 void update_estimated_states(double estimated_states[12][1],double dxangles[3][1],double dxangularspeeds[3],double dxposition[3],double dxvelocity[3],double KRes[12][1],double dt){
-    //PX4_INFO("Here 12");
-    //usleep(10000);
-
     double dx[12]={0,0,0,0,0,0,0,0,0,0,0,0};
     dx[0]=dxangles[0][0]+KRes[0][0];
     dx[1]=dxangles[1][0]+KRes[1][0];
@@ -153,9 +146,7 @@ void updateP(double Pdot[12][12],double P[12][12],double dt){
 
 void EKF(double sensors[9][1], double controls[4],double dt){
 
-    hrt_abstime startTime= hrt_absolute_time();
-    //PX4_INFO("Here 6");
-    //usleep(10000);
+    //hrt_abstime startTime= hrt_absolute_time();
     //static variables
     static double P[12][12];
     static double estimated_states[12][1];
@@ -197,12 +188,6 @@ void EKF(double sensors[9][1], double controls[4],double dt){
     double dxPosition[3]={0,0,0};
     double dxVelocity[3]={0,0,0};
 
-
-
-
-    //PX4_INFO("Here 7");
-    //usleep(10000);
-
     initializeMatrix<12>(F);
     initializeMatrix<9>(H);
     initializeMatrix<12>(K1);
@@ -220,10 +205,6 @@ void EKF(double sensors[9][1], double controls[4],double dt){
     initializeMatrix<9>(residuals);
     initializeMatrix<12>(KRes);
     initializeMatrix<3>(dxAngles);
-
-    //PX4_INFO("Here 7.11111111111");
-    //usleep(10000);
-
 
     //initializes R to identity matrix
     for(int i=0;i<9;i++)
@@ -246,9 +227,6 @@ void EKF(double sensors[9][1], double controls[4],double dt){
             
         }
 
-    //PX4_INFO("Here 7.22222222222");
-    //usleep(10000);
-    
     //variable initialization
     double tau[3]={0,0,0};
     
@@ -264,16 +242,10 @@ void EKF(double sensors[9][1], double controls[4],double dt){
         0,
         0};
 
-
-
-
     double angles[3]={estimated_states[0][0],estimated_states[1][0],estimated_states[2][0]};
     double angularSpeed[3][1]={estimated_states[3][0],
         estimated_states[4][0],
         estimated_states[5][0]};
-
-    //PX4_INFO("Here 7.3333333333");
-    //usleep(10000);
 
     transforMinv(angles,Minv);
     eul2rotmat(angles, rotm);
@@ -283,8 +255,6 @@ void EKF(double sensors[9][1], double controls[4],double dt){
     tau[1] = L*thrustf*((controls[0]+controls[1]) - (controls[2]+controls[3]));
     tau[2] = L*dragf*((controls[0]+controls[2]) - (controls[1]+controls[3]));
     
-    //PX4_INFO("Here 7.44444444");
-    //usleep(10000);
     double T2[3][1]={0,
                      0,
                      T};
@@ -308,10 +278,6 @@ void EKF(double sensors[9][1], double controls[4],double dt){
 
     EKF_Hk(H);
 
-    //PX4_INFO("Here 8");
-    //usleep(10000);
-
-
     transposeMatrix(H, Htrans);
     
     transposeMatrix(F, Ftrans);
@@ -330,7 +296,6 @@ void EKF(double sensors[9][1], double controls[4],double dt){
     multiplyMatrices<9>(K, residuals, KRes);
     
 
-
     update_estimated_states(estimated_states,dxAngles,dxAngularSpeed,dxPosition,dxVelocity,KRes,dt);
 
     updateP(Pdot, P,dt);
@@ -342,11 +307,15 @@ void EKF(double sensors[9][1], double controls[4],double dt){
 
 
 
-    hrt_abstime endTime= hrt_absolute_time();
-    PX4_ERR("EKF time: %llu\n", endTime-startTime);
+    //hrt_abstime endTime= hrt_absolute_time();
+    //PX4_ERR("EKF time: %llu\n", endTime-startTime);
 
-    //PX4_INFO("Here 13");
-    //usleep(10000);
 
 }//end of function
+
+bool attackDetected(){
+    return false;
+}
+
+
 

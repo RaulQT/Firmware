@@ -34,7 +34,7 @@ struct AngleInfo{
 struct F{
     double Fk[3][3];
 };
-
+bool attackDetected();
 void llaTOxyz(double lla[3],double ll0[2],double alt, double * array);//GPS convertion
 //data fusion
 AngleInfo angleDataFusionRoll(double y, double u, double R, double Q [2][2], double dt);

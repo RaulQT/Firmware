@@ -1207,7 +1207,6 @@ PX4FMU::run()
 void
 PX4FMU::cycle()
 {
-    PX4_INFO("Inside of fmu");
         while (true) {
 
 		if (_groups_subscribed != _groups_required) {
@@ -1380,14 +1379,6 @@ PX4FMU::cycle()
 				for (size_t i = 0; i < mixed_num_outputs; ++i) {
 					actuator_outputs.output[i] = pwm_limited[i];
 				}
-                                PX4_INFO("Output to servos 1");
-                                  PX4_INFO("1: %f",(double)actuator_outputs.output[0]);
-                                  PX4_INFO("2: %f",(double)actuator_outputs.output[1]);
-                                  PX4_INFO("3: %f",(double)actuator_outputs.output[2]);
-                                  PX4_INFO("4: %f",(double)actuator_outputs.output[3]);
-
-
-
 
 				orb_publish_auto(ORB_ID(actuator_outputs), &_outputs_pub, &actuator_outputs, &_class_instance, ORB_PRIO_DEFAULT);
 

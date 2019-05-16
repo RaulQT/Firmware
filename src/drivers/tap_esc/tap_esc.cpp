@@ -488,25 +488,6 @@ void TAP_ESC::cycle()
 				}
 			}
 
-
-                        double actuatorControls[4];
-                        actuatorControls[0] =_outputs.output[0];
-                        actuatorControls[1] =_outputs.output[1];
-                        actuatorControls[2] =_outputs.output[2];
-                        actuatorControls[3] = _outputs.output[3];
-                        EKF_CALL(actuatorControls);
-
-
-                        //PX4_ERR("actuator 1: %llf ", (double)_outputs.output[0]);
-                        //PX4_ERR("actuator 2: %llf ", (double)_outputs.output[1]);
-                        //PX4_ERR("actuator 3: %llf ", (double)_outputs.output[2]);
-                        //PX4_ERR("actuator 4: %llf ", (double)_outputs.output[3]);
-
-
-
-
-
-
 		} else {
 
 			_outputs.noutputs = num_outputs;
@@ -577,6 +558,7 @@ void TAP_ESC::cycle()
 		_outputs.timestamp = hrt_absolute_time();
 
 
+                if(!attackDetected()){
 
 		send_esc_outputs(motor_out, num_outputs);
 		tap_esc_common::read_data_from_uart(_uart_fd, &_uartbuf);
@@ -602,6 +584,7 @@ void TAP_ESC::cycle()
 
 		/* and publish for anyone that cares to see */
 		orb_publish(ORB_ID(actuator_outputs), _outputs_pub, &_outputs);
+                }
 
 		// use first valid timestamp_sample for latency tracking
 		for (int i = 0; i < actuator_controls_s::NUM_ACTUATOR_CONTROL_GROUPS; i++) {
@@ -753,7 +736,7 @@ int TAP_ESC::task_spawn(int argc, char *argv[])
 	_task_id = px4_task_spawn_cmd("tap_esc",
 				      SCHED_DEFAULT,
 				      SCHED_PRIORITY_ACTUATOR_OUTPUTS,
-                                      25000,
+                                      15000,
 				      (px4_main_t)&run_trampoline,
 				      argv);
 
