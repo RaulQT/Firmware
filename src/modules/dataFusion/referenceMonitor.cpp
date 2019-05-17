@@ -90,8 +90,6 @@ int ReferenceMonitor::print_usage(const char *reason){
 
 int ReferenceMonitor::print_status(){
     PX4_INFO("Running");
-    // TODO: print additional runtime information about the state of the module
-
     return 0;
 }
 
@@ -176,7 +174,7 @@ ReferenceMonitor::ReferenceMonitor(int example_param, bool example_flag) : Modul
 }
 
 void ReferenceMonitor::run(){
-   // PX4_INFO("Here 1");
+    // PX4_INFO("Here 1");
     //subscribe to topic needed
     int sensor_combined_sub = orb_subscribe(ORB_ID(sensor_combined));
     int vehicle_magnetometer_sub = orb_subscribe(ORB_ID(vehicle_magnetometer));
@@ -184,22 +182,21 @@ void ReferenceMonitor::run(){
     int actuator_outputs_sub = orb_subscribe(ORB_ID(actuator_outputs));
 
     //initialize parameters
-    int parameter_update_sub = orb_subscribe(ORB_ID(parameter_update));
-    parameters_update(parameter_update_sub, true);
+    //int parameter_update_sub = orb_subscribe(ORB_ID(parameter_update));
+    //parameters_update(parameter_update_sub, true);
 
     //structures needed
-    struct sensor_combined_s raw;
-    struct vehicle_magnetometer_s magnetometer;
-    struct vehicle_gps_position_s gps;
-    struct actuator_outputs_s actuators;
+    struct sensor_combined_s raw ={};
+    struct vehicle_magnetometer_s magnetometer = {};
+    struct vehicle_gps_position_s gps ={};
+    struct actuator_outputs_s actuators= {};
 
+    struct Imu imuRaw ={};
+    struct AngleInfo roll_angle = {};
+    struct AngleInfo pitch_angle = {};
+    struct AngleInfo yaw_angle = {};
 
-    struct Imu imuRaw;
-    struct AngleInfo roll_angle;
-    struct AngleInfo pitch_angle;
-    struct AngleInfo yaw_angle;
-
-    /*parameters needed for data fusion function*/
+    //parameters needed for data fusion function
     double m1;          //intermediate variables for yaw calculation
     double m2;
     double roll_acc;    //estimated roll angle from accelerometer
@@ -211,172 +208,110 @@ void ReferenceMonitor::run(){
     double Q[2][2]={0.01,0,
                     0,0.01};
 
-
     double currentGPS[3]={0,0,0};
     double correctedGPS[3]={0,0,0};
     double initialGPS[2]={0,0};
     double initialAlt=0;
 
-    double currentTime=0;
-    double previousTime =0;
     int executeOnce = 0;
-
-
-
 
     /*constants values adjusted*/
     dt =.2;
     R=.1;
 
-    //time measurements
-    hrt_abstime startTimeDF;
-    hrt_abstime endTimeDF;
-
     /* limit the update rate to 5 Hz */
-    orb_set_interval(sensor_combined_sub, 20);
-    orb_set_interval(vehicle_magnetometer_sub, 20);
-    orb_set_interval(vehicle_gps_position_sub, 20);
-    orb_set_interval(actuator_outputs_sub, 20);
+    //orb_set_interval(sensor_combined_sub, 20);
+    //orb_set_interval(vehicle_magnetometer_sub, 20);
+    //orb_set_interval(vehicle_gps_position_sub, 20);
+    //orb_set_interval(actuator_outputs_sub, 20);
 
 
     //initialized one by one to avoid issues in the drone
-    px4_pollfd_struct_t fds[4];
+    px4_pollfd_struct_t fds[1];
     fds[0].fd= sensor_combined_sub;
     fds[0].events= POLLIN;
     fds[0].revents= 0;
     fds[0].sem= NULL;
     fds[0].priv= NULL;
 
-    fds[1].fd= vehicle_magnetometer_sub;
-    fds[1].events= POLLIN;
-    fds[1].revents= 0;
-    fds[1].sem= NULL;
-    fds[1].priv= NULL;
-
-    fds[2].fd= vehicle_gps_position_sub;
-    fds[2].events= POLLIN;
-    fds[2].revents= 0;
-    fds[2].sem= NULL;
-    fds[2].priv= NULL;
-
-    fds[3].fd= actuator_outputs_sub;
-    fds[3].events= POLLIN;
-    fds[3].revents= 0;
-    fds[3].sem= NULL;
-    fds[3].priv= NULL;
-
-
-   // PX4_INFO("Here 2");
     while (!should_exit()) {
-       //PX4_INFO("ReferenceMonitor");
 
-       usleep(200000);
-
-
-
+        //usleep(200000);
         // wait for up to 1000ms for data
-        int poll_ret = px4_poll(fds, 4, 1000);
-        startTimeDF= hrt_absolute_time();
-
-        if (poll_ret == 0) {
-           // PX4_INFO("Here timeout");
-            // Timeout: let the loop run anyway, don't do `continue` here
+        hrt_abstime startTimeDF = hrt_absolute_time();
+        //PX4_ERR("start %llu",startTimeDF);
+        int poll_ret = px4_poll(fds, sizeof(fds)/sizeof(fds[0]), 1000);
+        hrt_abstime endTimeDF = hrt_absolute_time();
+        //PX4_ERR("end %llu",endTimeDF);
+        PX4_ERR("difference %llu",endTimeDF-startTimeDF);
+        if(!(fds[0].revents & POLLIN)){
+            //no new data
             continue;
+        }
 
-        } else if (poll_ret < 0) {
-            //PX4_INFO("Here ERROR");
-            // this is undesirable but not much we can do
-            PX4_ERR("poll error %d, %d", poll_ret, errno);
+        if (poll_ret < 0){
+            //poll error
             usleep(50000);
             continue;
 
-        } else{
+        }else if (poll_ret == 0) {
+            // timeout
+            continue;
+        }
+        //hrt_abstime startTimeDF = hrt_absolute_time();
+        // will wait and wake up when new data is available by px4_poll
+        orb_copy(ORB_ID(sensor_combined), sensor_combined_sub, &raw);
 
+        // gathering sensors_combined data
+        imuRaw.ax = (double)raw.accelerometer_m_s2[0];
+        imuRaw.ay = (double)raw.accelerometer_m_s2[1];
+        imuRaw.az = (double)raw.accelerometer_m_s2[2];
 
-            //PX4_INFO("Here else");
-            //usleep(10000);
+        imuRaw.gx= (double)raw.gyro_rad[0];
+        imuRaw.gy= (double)raw.gyro_rad[1];
+        imuRaw.gz= (double)raw.gyro_rad[2];
 
-            //dataFile<<"Available topics "<<poll_ret<<"\n";
-            if (fds[0].revents & POLLIN) {
-                //PX4_INFO("sensors combined executes: %llu us",hrt_absolute_time());
-                //dataFile<<"sensors combined"<<"\n";
-                // copy sensors raw data into local buffer
-                // accelerometer and gyroscope
-                orb_copy(ORB_ID(sensor_combined), sensor_combined_sub, &raw);
-                currentTime=raw.timestamp;
-                dt=(currentTime-previousTime)/1000000.0;
-                previousTime=currentTime;
+        bool magnetometer_updated =false;
+        orb_check(vehicle_magnetometer_sub, &magnetometer_updated);
+        if(magnetometer_updated){
+            if(orb_copy(ORB_ID(vehicle_magnetometer), vehicle_magnetometer_sub, &magnetometer) == PX4_OK){
+                imuRaw.mx =(double)magnetometer.magnetometer_ga[0];
+                imuRaw.my =(double)magnetometer.magnetometer_ga[1];
+                imuRaw.mz =(double)magnetometer.magnetometer_ga[2];
             }
+        }
 
-
-            if (fds[1].revents & POLLIN){
-                //PX4_INFO("magnetometer executes: %llu us",hrt_absolute_time());
-                //dataFile<<"magnetometer"<<"\n";
-                // copy magnetometer data into local buffer
-                // magnetometer
-                orb_copy(ORB_ID(vehicle_magnetometer), vehicle_magnetometer_sub, &magnetometer);
-                currentTime=magnetometer.timestamp;
-            }
-
-            if (fds[2].revents & POLLIN){
-                //PX4_INFO("GPS executes: %llu us",hrt_absolute_time());
-                //dataFile<<"gps"<<"\n";
-                // copy GPS data into local buffer
-                // gps
-                orb_copy(ORB_ID(vehicle_gps_position), vehicle_gps_position_sub, &gps);
-                currentTime=gps.timestamp;
-
+        bool gps_updated = false;
+        orb_check(vehicle_gps_position_sub, &gps_updated);
+        if(gps_updated){
+            if(orb_copy(ORB_ID(vehicle_gps_position), vehicle_gps_position_sub, &gps) ==PX4_OK){
+                //gather the inital location
                 if(executeOnce==0){
                     initialGPS[0]= 32.9807568;          //(double)gps.lat/10000000;
                     initialGPS[1]= -96.7547627;         //(double)gps.lon/10000000;
                     initialAlt =  204;                  //(double)gps.alt/1000;
                     executeOnce++;
-                    if(initialGPS[0]>3){
-                        executeOnce++;
-                        initialAlt++;
-                    }
-
+                }else{
+                    currentGPS[0] = (double)gps.lat/10000000;
+                    currentGPS[1] = (double)gps.lon/10000000;
+                    currentGPS[2] = (double)gps.alt/1000;
+                    llaTOxyz(currentGPS,initialGPS, initialAlt, correctedGPS);
                 }
             }
+        }
 
-
-
-            if (fds[3].revents & POLLIN) {
-                    orb_copy(ORB_ID(actuator_outputs),actuator_outputs_sub, &actuators);
-                            //PX4_INFO("actuator %f", (double)actuators.output[0]);
-                            //PX4_INFO("actuator %f",(double)actuators.output[1]);
-                            //PX4_INFO("actuator %f",(double)actuators.output[2]);
-                            //PX4_INFO("actuator %f",(double)actuators.output[3]);
-                    controls[0]=actuators.output[0];
-                    controls[1]=actuators.output[1];
-                    controls[2]=actuators.output[2];
-                    controls[3]=actuators.output[3];
+        bool actuators_updated = false;
+        orb_check(actuator_outputs_sub, &actuators_updated);
+        if(actuators_updated){
+            if(orb_copy(ORB_ID(actuator_outputs),actuator_outputs_sub, &actuators) == PX4_OK){
+                controls[0]=actuators.output[0];
+                controls[1]=actuators.output[1];
+                controls[2]=actuators.output[2];
+                controls[3]=actuators.output[3];
             }
+        }
 
-
-
-
-            //PX4_INFO("Here gathering sensor info, sleep 1s");
-
-            // gathering sensor information
-            imuRaw.ax = (double)raw.accelerometer_m_s2[0];
-            imuRaw.ay = (double)raw.accelerometer_m_s2[1];
-            imuRaw.az = (double)raw.accelerometer_m_s2[2];
-
-            imuRaw.gx= (double)raw.gyro_rad[0];
-            imuRaw.gy= (double)raw.gyro_rad[1];
-            imuRaw.gz= (double)raw.gyro_rad[2];
-
-            imuRaw.mx =(double)magnetometer.magnetometer_ga[0];
-            imuRaw.my =(double)magnetometer.magnetometer_ga[1];
-            imuRaw.mz =(double)magnetometer.magnetometer_ga[2];
-
-            currentGPS[0]= 32.9807568;      //(double)gps.lat/10000000;
-            currentGPS[1]= -96.7547627;     //(double)gps.lon/10000000;
-            currentGPS[2] = 204;            //(double)gps.alt/1000;
-
-            llaTOxyz(currentGPS,initialGPS, initialAlt, correctedGPS);
-
+        if(magnetometer_updated){
             //Roll angle
             roll_acc=atan(imuRaw.ay/imuRaw.az);
             u=imuRaw.gx;
@@ -406,33 +341,21 @@ void ReferenceMonitor::run(){
             sensors[6][0]=correctedGPS[0];
             sensors[7][0]=correctedGPS[1];
             sensors[8][0]=correctedGPS[2];
+            //hrt_abstime endTimeDF = hrt_absolute_time();
+            //PX4_ERR("New design time: %llu us", endTimeDF-startTimeDF);
+        }
 
-            controls[0]=actuators.output[0];
-            controls[1]=actuators.output[1];
-            controls[2]=actuators.output[2];
-            controls[3]=actuators.output[3];
-
-
-
-
+        if(actuators_updated){
+            //hrt_abstime startTime = hrt_absolute_time();
             EKF(sensors,controls,dt);
-
-
-
-            endTimeDF = hrt_absolute_time();
-            PX4_ERR("New design time: %llu us", endTimeDF-startTimeDF);
-
-            parameters_update(parameter_update_sub);
-
-        }//end else
-
+            //hrt_abstime endTime = hrt_absolute_time();
+            //PX4_ERR("New design time: %llu us", endTime-startTime);
+        }
 
     }//end while
     orb_unsubscribe(sensor_combined_sub);
     orb_unsubscribe(vehicle_magnetometer_sub);
     orb_unsubscribe(vehicle_gps_position_sub);
-    orb_unsubscribe(parameter_update_sub);
-
 }
 
 

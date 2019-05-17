@@ -16,20 +16,12 @@
 bool systemCompromised = false;
 
 void llaTOxyz(double lla[3],double ll0[2],double alt, double * array){
-
-   // PX4_INFO("inside of llatoxyz");
-   //char strbuf[32];
-
     double PI= 3.14159265;
     double R =6378137;
     double f =1/298.257223563;
 
     double dLat = lla[0]-ll0[0];
     double dLon = lla[1]-ll0[1];
-
-
-    //sprintf(strbuf, "lat %lf,lon %lf", dLat, dLon);
-
 
     double rll0[2];
     rll0[0]=ll0[0]*PI/180;
@@ -44,8 +36,6 @@ void llaTOxyz(double lla[3],double ll0[2],double alt, double * array){
     array[1] =dEast;
     array[2] =-lla[2]-alt;
 
-    //sprintf(strbuf, "arr0 %lf,arr1 %lf,arr2 %lf", array[0], array[1], array[2]);
-    //PX4_INFO(strbuf);
 }
 
 void EKF_Fk(double x[12][1],   double Ix, double Iy, double Iz,  double T, double m,  double kd, double Fk[12][12]){
