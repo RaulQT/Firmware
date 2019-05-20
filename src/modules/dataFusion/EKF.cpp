@@ -37,55 +37,11 @@ void llaTOxyz(double lla[3],double ll0[2],double alt, double * array){
     array[2] =-lla[2]-alt;
 
 }
-
-void EKF_Fk(double x[12][1],   double Ix, double Iy, double Iz,  double T, double m,  double kd, double Fk[12][12]){
-
-    double Fk_temp[12][12]={
-        x[4][0]*cos(x[0][0])*tan(x[1][0])-x[5][0]*sin(x[0][0])*tan(x[1][0]),x[5][0]*cos(x[0][0])*(pow(tan(x[1][0]),2) + 1)+x[4][0]*sin(x[0][0])*(pow(tan(x[1][0]),2)+ 1),0,1,sin(x[0][0])*tan(x[1][0]),cos(x[0][0])*tan(x[1][0]),0,0,0,0,0,0,
-        
-        -x[5][0]*cos(x[0][0])-x[4][0]*sin(x[0][0]),0,0,0,cos(x[0][0]),-sin(x[0][0]),0,0,0,0,0,0,
-        
-        (x[4][0]*cos(x[0][0]))/cos(x[1][0])-(x[5][0]*sin(x[0][0]))/cos(x[1][0]),(x[5][0]*cos(x[0][0])*sin(x[1][0]))/pow(cos(x[1][0]),2) + (x[4][0]*sin(x[0][0])*sin(x[1][0]))/pow(cos(x[1][0]),2),0,0,sin(x[0][0])/cos(x[1][0]),cos(x[0][0])/cos(x[1][0]),0,0,0,0,0,0,
-        
-        0,0,0,0,(x[5][0]*(Iy - Iz))/Ix,(x[4][0]*(Iy - Iz))/Ix,0,0,0,0,0,0,
-        
-        0,0,0,-(x[5][0]*(Ix - Iz))/Iy,0, -(x[3][0]*(Ix - Iz))/Iy,0,0,0,0,0,0,
-        
-        0,0,0,(x[4][0]*(Ix - Iy))/Iz, (x[3][0]*(Ix - Iy))/Iz,0,0,0,0,0,0,0,
-        
-        0,0,0,0,0,0,0,0,0,1,0,0,
-        
-        0,0,0,0,0,0,0,0,0,0,1,0,
-        
-        0,0,0,0,0,0,0,0,0,0,0,1,
-        (T*(cos(x[0][0])*sin(x[2][0]) - cos(x[2][0])*sin(x[0][0])*sin(x[1][0])))/m,(T*cos(x[0][0])*cos(x[1][0])*cos(x[2][0]))/m, (T*(cos(x[2][0])*sin(x[0][0]) - cos(x[0][0])*sin(x[1][0])*sin(x[2][0])))/m,0,0,0,0,0,0,-kd/m,0,0,
-        
-        -(T*(cos(x[0][0])*cos(x[2][0]) + sin(x[0][0])*sin(x[1][0])*sin(x[2][0])))/m,(T*cos(x[0][0])*cos(x[1][0])*sin(x[2][0]))/m,(T*(sin(x[0][0])*sin(x[2][0])+cos(x[0][0])*cos(x[2][0])*sin(x[1][0])))/m,0,0,0,0,0,0,0,-kd/m,0,
-        
-        -(T*cos(x[1][0])*sin(x[0][0]))/m,-(T*cos(x[0][0])*sin(x[1][0]))/m,0,0,0,0,0,0,0,0,0,-kd/m};
-
-    for(int i=0;i<12;i++)
-        for(int j=0;j<12;j++)
-            Fk[i][j]=Fk_temp[i][j];
-
-}
-void EKF_Hk(double Hk[9][12]){
-    for(int i=0;i<9;i++)
-        for(int j=0;j<12;j++)
-        {
-            if(i==j)
-                Hk[i][j]=1;
-            
-            else
-                Hk[i][j]=0;
-        }
-}
-
 // Rotation matrix
 void eul2rotmat(double angles[3],double rotmatrix[3][3]){
     double R2[3][3]={cos(angles[1])*cos(angles[2]), sin(angles[0])*sin(angles[1])*cos(angles[2])-cos(angles[0])*sin(angles[2]), cos(angles[0])*sin(angles[1])*cos(angles[2])+sin(angles[0])*sin(angles[2]),
-        cos(angles[1])*sin(angles[2]),sin(angles[0])*sin(angles[1])*sin(angles[2])+cos(angles[0])*cos(angles[2]), cos(angles[0])*sin(angles[1])*sin(angles[2])-sin(angles[0])*cos(angles[2]),
-        -sin(angles[1]),sin(angles[0])*cos(angles[1]),cos(angles[0])*cos(angles[1])};
+                     cos(angles[1])*sin(angles[2]),sin(angles[0])*sin(angles[1])*sin(angles[2])+cos(angles[0])*cos(angles[2]), cos(angles[0])*sin(angles[1])*sin(angles[2])-sin(angles[0])*cos(angles[2]),
+                     -sin(angles[1]),sin(angles[0])*cos(angles[1]),cos(angles[0])*cos(angles[1])};
     
     for(int i=0;i<3;i++)
         for(int j=0;j<3;j++)
@@ -123,8 +79,6 @@ void update_estimated_states(double estimated_states[12][1],double dxangles[3][1
     
     for(int i=0;i<12;i++)
         estimated_states[i][0]=estimated_states[i][0]+dt*dx[i];
-    
-    
 }
 
 void updateP(double Pdot[12][12],double P[12][12],double dt){
@@ -136,27 +90,11 @@ void updateP(double Pdot[12][12],double P[12][12],double dt){
 
 void EKF(double sensors[9][1], double controls[4],double dt){
 
-    //hrt_abstime startTime= hrt_absolute_time();
+    hrt_abstime startTime= hrt_absolute_time();
     //static variables
     static double P[12][12];
     static double estimated_states[12][1];
-    
-    //constants
-    double Ix=0.005;
-    double Iy=0.005;
-    double Iz=0.009;
-    double m=1;
-    double kd=0.025;
-    double dragf=1;
-    double thrustf=1;
-    double control_bias=1;
-    double L=0.15;
-    double g=9.8;
-    
-    double T=0;
 
-    double F[12][12];
-    double H[9][12];
     double K1[12][9];
     double Htrans[12][9];
     double Rinv[9][9];//inverse of R
@@ -169,8 +107,7 @@ void EKF(double sensors[9][1], double controls[4],double dt){
     double Pdot[12][12];
     double Pdot1[12][12];
     double Pdot2[12][12];
-    double Q[12][12];
-    double R[9][9];
+
     double residuals[9][1];
     double KRes[12][1];
     double dxAngles[3][1];              //dynamics of the drone
@@ -178,100 +115,127 @@ void EKF(double sensors[9][1], double controls[4],double dt){
     double dxPosition[3]={0,0,0};
     double dxVelocity[3]={0,0,0};
 
-    initializeMatrix<12>(F);
-    initializeMatrix<9>(H);
-    initializeMatrix<12>(K1);
-    initializeMatrix<12>(Htrans);
-    initializeMatrix<9>(Rinv);
-    initializeMatrix<12>(K);
-    initializeMatrix<12>(FP);
-    initializeMatrix<12>(Ftrans);
-    initializeMatrix<12>(PFt);
-    initializeMatrix<12>(KH);
-    initializeMatrix<12>(KHP);
-    initializeMatrix<12>(Pdot);
-    initializeMatrix<12>(Pdot2);
-    initializeMatrix<12>(Pdot1);
-    initializeMatrix<9>(residuals);
-    initializeMatrix<12>(KRes);
-    initializeMatrix<3>(dxAngles);
+    double H[9][12]={1,0,0,0,0,0,0,0,0,0,0,0,
+                     0,1,0,0,0,0,0,0,0,0,0,0,
+                     0,0,1,0,0,0,0,0,0,0,0,0,
+                     0,0,0,1,0,0,0,0,0,0,0,0,
+                     0,0,0,0,1,0,0,0,0,0,0,0,
+                     0,0,0,0,0,1,0,0,0,0,0,0,
+                     0,0,0,0,0,0,1,0,0,0,0,0,
+                     0,0,0,0,0,0,0,1,0,0,0,0,
+                     0,0,0,0,0,0,0,0,1,0,0,0};
 
-    //initializes R to identity matrix
-    for(int i=0;i<9;i++)
-        for(int j=0;j<9;j++){
-            if(i==j)
-                R[i][j]=1;
-            else
-                R[i][j]=0;
-            
-        }
-    
-    inverseMatrix(R, Rinv);
-    
-    for(int i=0;i<12;i++)
-        for(int j=0;j<12;j++){
-            if(i==j)
-                Q[i][j]=1;
-            else
-                Q[i][j]=0;
-            
-        }
+    double r=1;
+    double R[9][9]={r,0,0,0,0,0,0,0,0,
+                    0,r,0,0,0,0,0,0,0,
+                    0,0,r,0,0,0,0,0,0,
+                    0,0,0,r,0,0,0,0,0,
+                    0,0,0,0,r,0,0,0,0,
+                    0,0,0,0,0,r,0,0,0,
+                    0,0,0,0,0,0,r,0,0,
+                    0,0,0,0,0,0,0,r,0,
+                    0,0,0,0,0,0,0,0,r};
+
+    double q=1;
+    double Q[12][12]={q,0,0,0,0,0,0,0,0,0,0,0,
+                      0,q,0,0,0,0,0,0,0,0,0,0,
+                      0,0,q,0,0,0,0,0,0,0,0,0,
+                      0,0,0,q,0,0,0,0,0,0,0,0,
+                      0,0,0,0,q,0,0,0,0,0,0,0,
+                      0,0,0,0,0,q,0,0,0,0,0,0,
+                      0,0,0,0,0,0,q,0,0,0,0,0,
+                      0,0,0,0,0,0,0,q,0,0,0,0,
+                      0,0,0,0,0,0,0,0,q,0,0,0,
+                      0,0,0,0,0,0,0,0,0,q,0,0,
+                      0,0,0,0,0,0,0,0,0,0,q,0,
+                      0,0,0,0,0,0,0,0,0,0,0,q};
 
     //variable initialization
+    //constants
+    double Ix=0.005;
+    double Iy=0.005;
+    double Iz=0.009;
+    double m=1;
+    double kd=0.025;
+    double dragf=1;
+    double thrustf=1;
+    double control_bias=1;
+    double L=0.15;
+    double g=9.8;
+    double T=0;
+
+    double F[12][12]={
+        estimated_states[4][0]*cos(estimated_states[0][0])*tan(estimated_states[1][0])-estimated_states[5][0]*sin(estimated_states[0][0])*tan(estimated_states[1][0]),estimated_states[5][0]*cos(estimated_states[0][0])*(pow(tan(estimated_states[1][0]),2) + 1)+estimated_states[4][0]*sin(estimated_states[0][0])*(pow(tan(estimated_states[1][0]),2)+ 1),0,1,sin(estimated_states[0][0])*tan(estimated_states[1][0]),cos(estimated_states[0][0])*tan(estimated_states[1][0]),0,0,0,0,0,0,
+
+        -estimated_states[5][0]*cos(estimated_states[0][0])-estimated_states[4][0]*sin(estimated_states[0][0]),0,0,0,cos(estimated_states[0][0]),-sin(estimated_states[0][0]),0,0,0,0,0,0,
+
+        (estimated_states[4][0]*cos(estimated_states[0][0]))/cos(estimated_states[1][0])-(estimated_states[5][0]*sin(estimated_states[0][0]))/cos(estimated_states[1][0]),(estimated_states[5][0]*cos(estimated_states[0][0])*sin(estimated_states[1][0]))/pow(cos(estimated_states[1][0]),2) + (estimated_states[4][0]*sin(estimated_states[0][0])*sin(estimated_states[1][0]))/pow(cos(estimated_states[1][0]),2),0,0,sin(estimated_states[0][0])/cos(estimated_states[1][0]),cos(estimated_states[0][0])/cos(estimated_states[1][0]),0,0,0,0,0,0,
+
+        0,0,0,0,(estimated_states[5][0]*(Iy - Iz))/Ix,(estimated_states[4][0]*(Iy - Iz))/Ix,0,0,0,0,0,0,
+
+        0,0,0,-(estimated_states[5][0]*(Ix - Iz))/Iy,0, -(estimated_states[3][0]*(Ix - Iz))/Iy,0,0,0,0,0,0,
+
+        0,0,0,(estimated_states[4][0]*(Ix - Iy))/Iz, (estimated_states[3][0]*(Ix - Iy))/Iz,0,0,0,0,0,0,0,
+
+        0,0,0,0,0,0,0,0,0,1,0,0,
+
+        0,0,0,0,0,0,0,0,0,0,1,0,
+
+        0,0,0,0,0,0,0,0,0,0,0,1,
+        (T*(cos(estimated_states[0][0])*sin(estimated_states[2][0]) - cos(estimated_states[2][0])*sin(estimated_states[0][0])*sin(estimated_states[1][0])))/m,(T*cos(estimated_states[0][0])*cos(estimated_states[1][0])*cos(estimated_states[2][0]))/m, (T*(cos(estimated_states[2][0])*sin(estimated_states[0][0]) - cos(estimated_states[0][0])*sin(estimated_states[1][0])*sin(estimated_states[2][0])))/m,0,0,0,0,0,0,-kd/m,0,0,
+
+        -(T*(cos(estimated_states[0][0])*cos(estimated_states[2][0]) + sin(estimated_states[0][0])*sin(estimated_states[1][0])*sin(estimated_states[2][0])))/m,(T*cos(estimated_states[0][0])*cos(estimated_states[1][0])*sin(estimated_states[2][0]))/m,(T*(sin(estimated_states[0][0])*sin(estimated_states[2][0])+cos(estimated_states[0][0])*cos(estimated_states[2][0])*sin(estimated_states[1][0])))/m,0,0,0,0,0,0,0,-kd/m,0,
+
+        -(T*cos(estimated_states[1][0])*sin(estimated_states[0][0]))/m,-(T*cos(estimated_states[0][0])*sin(estimated_states[1][0]))/m,0,0,0,0,0,0,0,0,0,-kd/m};
+
+
     double tau[3]={0,0,0};
-    
     double Minv[3][3]={0,0,0,
-        0,0,0,
-        0,0,0};
+                       0,0,0,
+                       0,0,0};
     
     double rotm[3][3]={0,0,0,
-        0,0,0,
-        0,0,0};
-    
-    double TB[3][1]={0,
-        0,
-        0};
+                       0,0,0,
+                       0,0,0};
 
+    double TB[3][1]={0,
+                     0,
+                     0};
+
+    inverseMatrix(R, Rinv);
     double angles[3]={estimated_states[0][0],estimated_states[1][0],estimated_states[2][0]};
     double angularSpeed[3][1]={estimated_states[3][0],
-        estimated_states[4][0],
-        estimated_states[5][0]};
+                               estimated_states[4][0],
+                               estimated_states[5][0]};
 
     transforMinv(angles,Minv);
     eul2rotmat(angles, rotm);
-    
+
     T=thrustf*(controls[0]+controls[1]+controls[2]+controls[3]-4*control_bias);
     tau[0] = L*thrustf*((controls[1]+controls[2]) - (controls[0]+controls[3]));
     tau[1] = L*thrustf*((controls[0]+controls[1]) - (controls[2]+controls[3]));
     tau[2] = L*dragf*((controls[0]+controls[2]) - (controls[1]+controls[3]));
-    
+
     double T2[3][1]={0,
                      0,
                      T};
-    
+
     multiplyMatrices<3>(rotm, T2, TB);
     multiplyMatrices<3>(Minv, angularSpeed, dxAngles);
     dxAngularSpeed[0]=tau[0]/Ix+(Iy-Iz)/Ix*angularSpeed[1][0]*angularSpeed[2][0];
     dxAngularSpeed[1]=tau[1]/Iy+(Iz-Ix)/Iy*angularSpeed[0][0]*angularSpeed[2][0];
     dxAngularSpeed[2]=tau[2]/Iz+(Ix-Iy)/Iz*angularSpeed[0][0]*angularSpeed[1][0];
-    
+
     dxPosition[0]=estimated_states[9][0];
     dxPosition[1]=estimated_states[10][0];
     dxPosition[2]=estimated_states[11][0];
-    
 
     dxVelocity[0]= TB[0][0]/m-kd*estimated_states[9][0];
     dxVelocity[1]= TB[1][0]/m-kd*estimated_states[10][0];
     dxVelocity[2]= -g+TB[2][0]/m-kd*estimated_states[11][0];
 
-    EKF_Fk(estimated_states,Ix,Iy,Iz,T,m,kd,F);
-
-    EKF_Hk(H);
-
     transposeMatrix(H, Htrans);
-    
     transposeMatrix(F, Ftrans);
-
     multiplyMatrices<12>(P, Htrans, K1);
     multiplyMatrices<12>(K1, Rinv, K);
     multiplyMatrices<12>(F, P, FP);
@@ -292,15 +256,11 @@ void EKF(double sensors[9][1], double controls[4],double dt){
     
     if((estimated_states[8][0]<=0))
         estimated_states[8][0]=0;
+
     if((estimated_states[8][0]<=0) && (estimated_states[11][0]<=0))
         estimated_states[11][0]=0;
-
-
-
-    //hrt_abstime endTime= hrt_absolute_time();
-    //PX4_ERR("EKF time: %llu\n", endTime-startTime);
-
-
+    hrt_abstime endTime= hrt_absolute_time();
+    PX4_ERR("EKF running time %llu us",endTime-startTime);
 }//end of function
 
 bool attackDetected(){

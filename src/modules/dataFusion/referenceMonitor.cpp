@@ -238,12 +238,12 @@ void ReferenceMonitor::run(){
 
         //usleep(200000);
         // wait for up to 1000ms for data
-        hrt_abstime startTimeDF = hrt_absolute_time();
+        //hrt_abstime startTimeDF = hrt_absolute_time();
         //PX4_ERR("start %llu",startTimeDF);
         int poll_ret = px4_poll(fds, sizeof(fds)/sizeof(fds[0]), 1000);
-        hrt_abstime endTimeDF = hrt_absolute_time();
+        //hrt_abstime endTimeDF = hrt_absolute_time();
         //PX4_ERR("end %llu",endTimeDF);
-        PX4_ERR("difference %llu",endTimeDF-startTimeDF);
+        //PX4_ERR("difference %llu",endTimeDF-startTimeDF);
         if(!(fds[0].revents & POLLIN)){
             //no new data
             continue;
