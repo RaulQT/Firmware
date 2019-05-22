@@ -407,7 +407,7 @@ void TAP_ESC::send_esc_outputs(const uint16_t *pwm, const uint8_t motor_cnt)
 
 void TAP_ESC::cycle()
 {
-    hrt_abstime startTime= hrt_absolute_time();
+    //hrt_abstime startTime= hrt_absolute_time();
 
 	if (_groups_subscribed != _groups_required) {
 		subscribe();
@@ -629,8 +629,8 @@ void TAP_ESC::cycle()
 
 
 
-        hrt_abstime endTime= hrt_absolute_time();
-        PX4_ERR("Tap Time: %llu\n", endTime-startTime);
+       // hrt_abstime endTime= hrt_absolute_time();
+        //PX4_ERR("Tap Time: %llu\n", endTime-startTime);
 
 }
 
