@@ -219,20 +219,6 @@ void ReferenceMonitor::run(){
     dt =.2;
     R=.1;
 
-<<<<<<< Updated upstream
-=======
-    //time measurements
-   // hrt_abstime startTimeDF;
-    //hrt_abstime endTimeDF;
-
->>>>>>> Stashed changes
-    /* limit the update rate to 5 Hz */
-    //orb_set_interval(sensor_combined_sub, 20);
-    //orb_set_interval(vehicle_magnetometer_sub, 20);
-    //orb_set_interval(vehicle_gps_position_sub, 20);
-    //orb_set_interval(actuator_outputs_sub, 20);
-
-
     //initialized one by one to avoid issues in the drone
     px4_pollfd_struct_t fds[1];
     fds[0].fd= sensor_combined_sub;
@@ -242,18 +228,9 @@ void ReferenceMonitor::run(){
     fds[0].priv= NULL;
 
     while (!should_exit()) {
-<<<<<<< Updated upstream
-=======
        //PX4_INFO("ReferenceMonitor");
-
-       //usleep(200000);
-
-
->>>>>>> Stashed changes
-
         //usleep(200000);
         // wait for up to 1000ms for data
-<<<<<<< Updated upstream
         //hrt_abstime startTimeDF = hrt_absolute_time();
         //PX4_ERR("start %llu",startTimeDF);
         int poll_ret = px4_poll(fds, sizeof(fds)/sizeof(fds[0]), 1000);
@@ -262,14 +239,6 @@ void ReferenceMonitor::run(){
         //PX4_ERR("difference %llu",endTimeDF-startTimeDF);
         if(!(fds[0].revents & POLLIN)){
             //no new data
-=======
-        int poll_ret = px4_poll(fds, 4, 1000);
-        //startTimeDF= hrt_absolute_time();
-
-        if (poll_ret == 0) {
-           // PX4_INFO("Here timeout");
-            // Timeout: let the loop run anyway, don't do `continue` here
->>>>>>> Stashed changes
             continue;
         }
 
@@ -372,22 +341,10 @@ void ReferenceMonitor::run(){
         if(actuators_updated){
             //hrt_abstime startTime = hrt_absolute_time();
             EKF(sensors,controls,dt);
-<<<<<<< Updated upstream
             //hrt_abstime endTime = hrt_absolute_time();
             //PX4_ERR("New design time: %llu us", endTime-startTime);
         }
-=======
 
-
-
-            //endTimeDF = hrt_absolute_time();
-            //PX4_ERR("New design time: %llu us", endTimeDF-startTimeDF);
-
-            parameters_update(parameter_update_sub);
-
-        }//end else
-
->>>>>>> Stashed changes
 
     }//end while
     orb_unsubscribe(sensor_combined_sub);

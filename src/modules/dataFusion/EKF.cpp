@@ -90,7 +90,6 @@ void updateP(double Pdot[12][12],double P[12][12],double dt){
 
 void EKF(double sensors[9][1], double controls[4],double dt){
 
-    hrt_abstime startTime= hrt_absolute_time();
     //static variables
     static double P[12][12];
     static double estimated_states[12][1];
@@ -259,18 +258,6 @@ void EKF(double sensors[9][1], double controls[4],double dt){
 
     if((estimated_states[8][0]<=0) && (estimated_states[11][0]<=0))
         estimated_states[11][0]=0;
-<<<<<<< Updated upstream
-    hrt_abstime endTime= hrt_absolute_time();
-    PX4_ERR("EKF running time %llu us",endTime-startTime);
-=======
-
-
-
-    hrt_abstime endTime= hrt_absolute_time();
-    PX4_ERR("EKF time: %llu\n", endTime-startTime);
-
-
->>>>>>> Stashed changes
 }//end of function
 
 bool attackDetected(){
