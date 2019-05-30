@@ -558,7 +558,7 @@ void TAP_ESC::cycle()
 		_outputs.timestamp = hrt_absolute_time();
 
 
-                if(!attackDetected()){
+                //if(!attackDetected()){
 
 		send_esc_outputs(motor_out, num_outputs);
 		tap_esc_common::read_data_from_uart(_uart_fd, &_uartbuf);
@@ -584,7 +584,7 @@ void TAP_ESC::cycle()
 
 		/* and publish for anyone that cares to see */
 		orb_publish(ORB_ID(actuator_outputs), _outputs_pub, &_outputs);
-                }
+                //}
 
 		// use first valid timestamp_sample for latency tracking
 		for (int i = 0; i < actuator_controls_s::NUM_ACTUATOR_CONTROL_GROUPS; i++) {

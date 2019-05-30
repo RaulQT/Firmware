@@ -228,15 +228,10 @@ void ReferenceMonitor::run(){
     fds[0].priv= NULL;
 
     while (!should_exit()) {
-       //PX4_INFO("ReferenceMonitor");
-        //usleep(200000);
-        // wait for up to 1000ms for data
-        //hrt_abstime startTimeDF = hrt_absolute_time();
-        //PX4_ERR("start %llu",startTimeDF);
+
         int poll_ret = px4_poll(fds, sizeof(fds)/sizeof(fds[0]), 1000);
-        //hrt_abstime endTimeDF = hrt_absolute_time();
-        //PX4_ERR("end %llu",endTimeDF);
-        //PX4_ERR("difference %llu",endTimeDF-startTimeDF);
+        hrt_abstime startTimeDF = hrt_absolute_time();
+
         if(!(fds[0].revents & POLLIN)){
             //no new data
             continue;
@@ -251,7 +246,7 @@ void ReferenceMonitor::run(){
             // timeout
             continue;
         }
-        //hrt_abstime startTimeDF = hrt_absolute_time();
+
         // will wait and wake up when new data is available by px4_poll
         orb_copy(ORB_ID(sensor_combined), sensor_combined_sub, &raw);
 
@@ -334,16 +329,18 @@ void ReferenceMonitor::run(){
             sensors[6][0]=correctedGPS[0];
             sensors[7][0]=correctedGPS[1];
             sensors[8][0]=correctedGPS[2];
-            //hrt_abstime endTimeDF = hrt_absolute_time();
-            //PX4_ERR("New design time: %llu us", endTimeDF-startTimeDF);
         }
 
+        hrt_abstime endTimeDF = hrt_absolute_time();
+        PX4_ERR("ND DF: %llu us", endTimeDF-startTimeDF);
         if(actuators_updated){
-            //hrt_abstime startTime = hrt_absolute_time();
+            hrt_abstime startTime = hrt_absolute_time();
             EKF(sensors,controls,dt);
-            //hrt_abstime endTime = hrt_absolute_time();
-            //PX4_ERR("New design time: %llu us", endTime-startTime);
+            hrt_abstime endTime = hrt_absolute_time();
+            PX4_ERR("ND EKF: %llu us", endTime-startTime);
         }
+
+        usleep(200000);
 
 
     }//end while
