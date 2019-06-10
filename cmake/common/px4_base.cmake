@@ -334,28 +334,28 @@ function(px4_add_common_flags)
 		ARGN ${ARGN})
 
 	set(warnings
-		-Wall
-		-Warray-bounds
-		-Wdisabled-optimization
-		-Werror
-		-Wextra
-		-Wfatal-errors
-		-Wfloat-equal
-		-Wformat-security
-		-Winit-self
-		-Wlogical-op
-		-Wmissing-declarations
-		-Wmissing-field-initializers
+	#	-Wall
+	#	-Warray-bounds
+	#	-Wdisabled-optimization
+	#	-Werror
+	#	-Wextra
+	#	-Wfatal-errors
+	#	-Wfloat-equal
+	#	-Wformat-security
+	#	-Winit-self
+	#	-Wlogical-op
+	#	-Wmissing-declarations
+	#	-Wmissing-field-initializers
 		#-Wmissing-include-dirs # TODO: fix and enable
-		-Wpointer-arith
-		-Wshadow
-		-Wuninitialized
-		-Wunknown-pragmas
-		-Wunused-variable
+	#	-Wpointer-arith
+	#	-Wshadow
+	#	-Wuninitialized
+	#	-Wunknown-pragmas
+	#	-Wunused-variable
 
-		-Wno-implicit-fallthrough # set appropriate level and update
+	#	-Wno-implicit-fallthrough # set appropriate level and update
 
-		-Wno-unused-parameter
+	#	-Wno-unused-parameter
 		)
 
 	if (${CMAKE_C_COMPILER_ID} MATCHES ".*Clang.*")

@@ -229,6 +229,7 @@ void ReferenceMonitor::run(){
 
     while (!should_exit()) {
 
+        int x;
         int poll_ret = px4_poll(fds, sizeof(fds)/sizeof(fds[0]), 1000);
         hrt_abstime startTimeDF = hrt_absolute_time();
 
