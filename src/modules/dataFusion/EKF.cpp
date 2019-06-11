@@ -14,7 +14,7 @@
 #include <px4_log.h>
 #include <drivers/drv_hrt.h>
 bool systemCompromised = false;
-
+//                currentGPS, GPSInitial, initialAlt, correctedGPS
 void llaTOxyz(double lla[3],double ll0[2],double alt, double * array){
     double PI= 3.14159265;
     double R =6378137;
@@ -106,14 +106,13 @@ void EKF(double sensors[9][1], double controls[4],double dt){
     double Pdot[12][12];
     double Pdot1[12][12];
     double Pdot2[12][12];
-
     double residuals[9][1];
     double KRes[12][1];
     double dxAngles[3][1];              //dynamics of the drone
     double dxAngularSpeed[3]={0,0,0};
     double dxPosition[3]={0,0,0};
     double dxVelocity[3]={0,0,0};
-
+    double T;
     double H[9][12]={1,0,0,0,0,0,0,0,0,0,0,0,
                      0,1,0,0,0,0,0,0,0,0,0,0,
                      0,0,1,0,0,0,0,0,0,0,0,0,
@@ -124,7 +123,7 @@ void EKF(double sensors[9][1], double controls[4],double dt){
                      0,0,0,0,0,0,0,1,0,0,0,0,
                      0,0,0,0,0,0,0,0,1,0,0,0};
 
-    double r=1;
+    double r=5;
     double R[9][9]={r,0,0,0,0,0,0,0,0,
                     0,r,0,0,0,0,0,0,0,
                     0,0,r,0,0,0,0,0,0,
@@ -135,7 +134,7 @@ void EKF(double sensors[9][1], double controls[4],double dt){
                     0,0,0,0,0,0,0,r,0,
                     0,0,0,0,0,0,0,0,r};
 
-    double q=1;
+    double q=.001;
     double Q[12][12]={q,0,0,0,0,0,0,0,0,0,0,0,
                       0,q,0,0,0,0,0,0,0,0,0,0,
                       0,0,q,0,0,0,0,0,0,0,0,0,
@@ -154,17 +153,17 @@ void EKF(double sensors[9][1], double controls[4],double dt){
     double Ix=0.005;
     double Iy=0.005;
     double Iz=0.009;
-    double m=1;
-    double kd=0.025;
-    double dragf=1;
-    double thrustf=1;
-    double control_bias=1;
-    double L=0.15;
+    double m=1.285;
+    double kd=0.43;
+    double dragf= 1.7e-6;
+    double thrustf=2e-6;
+    double control_bias=1200;
+    double L=0.1905;
     double g=9.8;
-    double T=0;
+    T=thrustf*(controls[0]+controls[1]+controls[2]+controls[3]-4*control_bias);
 
     double F[12][12]={
-        estimated_states[4][0]*cos(estimated_states[0][0])*tan(estimated_states[1][0])-estimated_states[5][0]*sin(estimated_states[0][0])*tan(estimated_states[1][0]),estimated_states[5][0]*cos(estimated_states[0][0])*(pow(tan(estimated_states[1][0]),2) + 1)+estimated_states[4][0]*sin(estimated_states[0][0])*(pow(tan(estimated_states[1][0]),2)+ 1),0,1,sin(estimated_states[0][0])*tan(estimated_states[1][0]),cos(estimated_states[0][0])*tan(estimated_states[1][0]),0,0,0,0,0,0,
+        estimated_states[4][0]*cos(estimated_states[0][0])*tan(estimated_states[1][0])-estimated_states[5][0]*sin(estimated_states[0][0])*tan(estimated_states[1][0]), estimated_states[5][0]*cos(estimated_states[0][0])*(pow(tan(estimated_states[1][0]),2) + 1)+estimated_states[4][0]*sin(estimated_states[0][0])*(pow(tan(estimated_states[1][0]),2)+ 1), 0, 1, sin(estimated_states[0][0])*tan(estimated_states[1][0]), cos(estimated_states[0][0])*tan(estimated_states[1][0]), 0, 0, 0, 0, 0, 0,
 
         -estimated_states[5][0]*cos(estimated_states[0][0])-estimated_states[4][0]*sin(estimated_states[0][0]),0,0,0,cos(estimated_states[0][0]),-sin(estimated_states[0][0]),0,0,0,0,0,0,
 
@@ -210,7 +209,7 @@ void EKF(double sensors[9][1], double controls[4],double dt){
     transforMinv(angles,Minv);
     eul2rotmat(angles, rotm);
 
-    T=thrustf*(controls[0]+controls[1]+controls[2]+controls[3]-4*control_bias);
+
     tau[0] = L*thrustf*((controls[1]+controls[2]) - (controls[0]+controls[3]));
     tau[1] = L*thrustf*((controls[0]+controls[1]) - (controls[2]+controls[3]));
     tau[2] = L*dragf*((controls[0]+controls[2]) - (controls[1]+controls[3]));
@@ -251,6 +250,9 @@ void EKF(double sensors[9][1], double controls[4],double dt){
 
     update_estimated_states(estimated_states,dxAngles,dxAngularSpeed,dxPosition,dxVelocity,KRes,dt);
 
+
+
+
     updateP(Pdot, P,dt);
     
     if((estimated_states[8][0]<=0))
@@ -258,6 +260,52 @@ void EKF(double sensors[9][1], double controls[4],double dt){
 
     if((estimated_states[8][0]<=0) && (estimated_states[11][0]<=0))
         estimated_states[11][0]=0;
+
+
+
+
+    PX4_ERR("Sensors: \%f",controls[0]);
+    PX4_ERR("Sensors: \%f",controls[1]);
+    PX4_ERR("Sensors: \%f",controls[2]);
+    PX4_ERR("Sensors: \%f",controls[3]);
+
+    /*
+    PX4_ERR("Sensors: \%f",sensors[0][0]);
+    PX4_ERR("Sensors: \%f",sensors[1][0]);
+    PX4_ERR("Sensors: \%f",sensors[2][0]);
+    PX4_ERR("Sensors: \%f",sensors[3][0]);
+    PX4_ERR("Sensors: \%f",sensors[4][0]);
+    PX4_ERR("Sensors: \%f",sensors[5][0]);
+    PX4_ERR("Sensors: \%f",sensors[6][0]);
+    PX4_ERR("Sensors: \%f",sensors[7][0]);
+    PX4_ERR("Sensors: \%f\n",sensors[8][0]);
+
+    PX4_ERR("Estimated states: \%f",estimated_states[0][0]);
+    PX4_ERR("Estimated states: \%f",estimated_states[1][0]);
+    PX4_ERR("Estimated states: \%f",estimated_states[2][0]);
+    PX4_ERR("Estimated states: \%f",estimated_states[3][0]);
+    PX4_ERR("Estimated states: \%f",estimated_states[4][0]);
+    PX4_ERR("Estimated states: \%f",estimated_states[5][0]);
+    PX4_ERR("Estimated states: \%f",estimated_states[6][0]);
+    PX4_ERR("Estimated states: \%f",estimated_states[7][0]);
+    PX4_ERR("Estimated states: \%f",estimated_states[8][0]);
+    PX4_ERR("Estimated states: \%f",estimated_states[9][0]);
+    PX4_ERR("Estimated states: \%f",estimated_states[10][0]);
+    PX4_ERR("Estimated states: \%f\n",estimated_states[11][0]);
+
+
+    PX4_ERR("Residual \%f",estimated_states[0][0]-sensors[0][0]);
+    PX4_ERR("Residual \%f",estimated_states[1][0]-sensors[1][0]);
+    PX4_ERR("Residual \%f",estimated_states[2][0]-sensors[2][0]);
+    PX4_ERR("Residual \%f",estimated_states[3][0]-sensors[3][0]);
+    PX4_ERR("Residual \%f",estimated_states[4][0]-sensors[4][0]);
+    PX4_ERR("Residual \%f",estimated_states[5][0]-sensors[5][0]);
+    PX4_ERR("Residual \%f",estimated_states[6][0]-sensors[6][0]);
+    PX4_ERR("Residual \%f",estimated_states[7][0]-sensors[7][0]);
+    PX4_ERR("Residual \%f\n",estimated_states[8][0]-sensors[8][0]);
+    */
+
+
 }//end of function
 
 bool attackDetected(){

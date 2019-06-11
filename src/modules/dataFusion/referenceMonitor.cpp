@@ -51,13 +51,6 @@
 #include <uORB/topics/actuator_outputs.h>
 #include <drivers/drv_hrt.h>
 
-/*global variables needed for EKF*/
-double controls[4]={1000,1000,1000,1000};
-double sensors[9][1]={0,0,0,0,0,0,0,0,0};
-double dt=0;
-
-
-
 int ReferenceMonitor::print_usage(const char *reason){
     if (reason) {
         PX4_WARN("%s\n", reason);
@@ -174,16 +167,11 @@ ReferenceMonitor::ReferenceMonitor(int example_param, bool example_flag) : Modul
 }
 
 void ReferenceMonitor::run(){
-    // PX4_INFO("Here 1");
     //subscribe to topic needed
     int sensor_combined_sub = orb_subscribe(ORB_ID(sensor_combined));
     int vehicle_magnetometer_sub = orb_subscribe(ORB_ID(vehicle_magnetometer));
     int vehicle_gps_position_sub = orb_subscribe(ORB_ID(vehicle_gps_position));
     int actuator_outputs_sub = orb_subscribe(ORB_ID(actuator_outputs));
-
-    //initialize parameters
-    //int parameter_update_sub = orb_subscribe(ORB_ID(parameter_update));
-    //parameters_update(parameter_update_sub, true);
 
     //structures needed
     struct sensor_combined_s raw ={};
@@ -205,21 +193,22 @@ void ReferenceMonitor::run(){
     double y;
     double u;
     double R;
+    double dt;
     double Q[2][2]={0.01,0,
                     0,0.01};
-
+    double controls[4]={0,0,0,0};
+    double sensors[9][1]={0,0,0,0,0,0,0,0,0};
     double currentGPS[3]={0,0,0};
     double correctedGPS[3]={0,0,0};
     double initialGPS[2]={0,0};
     double initialAlt=0;
-
     int executeOnce = 0;
 
-    /*constants values adjusted*/
+    //constants values adjusted
     dt =.2;
     R=.1;
 
-    //initialized one by one to avoid issues in the drone
+    //initialize structure to be dependent on IMU reading on sensor_combined data
     px4_pollfd_struct_t fds[1];
     fds[0].fd= sensor_combined_sub;
     fds[0].events= POLLIN;
@@ -227,11 +216,11 @@ void ReferenceMonitor::run(){
     fds[0].sem= NULL;
     fds[0].priv= NULL;
 
-    while (!should_exit()) {
+    while (!should_exit()){
 
         int x;
         int poll_ret = px4_poll(fds, sizeof(fds)/sizeof(fds[0]), 1000);
-        hrt_abstime startTimeDF = hrt_absolute_time();
+        //hrt_abstime startTimeDF = hrt_absolute_time();
 
         if(!(fds[0].revents & POLLIN)){
             //no new data
@@ -264,6 +253,7 @@ void ReferenceMonitor::run(){
         orb_check(vehicle_magnetometer_sub, &magnetometer_updated);
         if(magnetometer_updated){
             if(orb_copy(ORB_ID(vehicle_magnetometer), vehicle_magnetometer_sub, &magnetometer) == PX4_OK){
+                //gathering vehicle_magnetometer data
                 imuRaw.mx =(double)magnetometer.magnetometer_ga[0];
                 imuRaw.my =(double)magnetometer.magnetometer_ga[1];
                 imuRaw.mz =(double)magnetometer.magnetometer_ga[2];
@@ -274,16 +264,18 @@ void ReferenceMonitor::run(){
         orb_check(vehicle_gps_position_sub, &gps_updated);
         if(gps_updated){
             if(orb_copy(ORB_ID(vehicle_gps_position), vehicle_gps_position_sub, &gps) ==PX4_OK){
-                //gather the inital location
+                //gathering vehicle_gps_position data
                 if(executeOnce==0){
-                    initialGPS[0]= 32.9807568;          //(double)gps.lat/10000000;
-                    initialGPS[1]= -96.7547627;         //(double)gps.lon/10000000;
-                    initialAlt =  204;                  //(double)gps.alt/1000;
+                    //get initial position. Executed once
+                    initialGPS[0] = (double)gps.lat/10000000;   //32.9807568;
+                    initialGPS[1] = (double)gps.lon/10000000;   //-96.7547627;
+                    initialAlt    = (double)gps.alt/1000;       //204;
                     executeOnce++;
                 }else{
+                    //get current position
                     currentGPS[0] = (double)gps.lat/10000000;
                     currentGPS[1] = (double)gps.lon/10000000;
-                    currentGPS[2] = (double)gps.alt/1000;
+                    currentGPS[2] = - (double)gps.alt/1000;
                     llaTOxyz(currentGPS,initialGPS, initialAlt, correctedGPS);
                 }
             }
@@ -293,10 +285,11 @@ void ReferenceMonitor::run(){
         orb_check(actuator_outputs_sub, &actuators_updated);
         if(actuators_updated){
             if(orb_copy(ORB_ID(actuator_outputs),actuator_outputs_sub, &actuators) == PX4_OK){
-                controls[0]=actuators.output[0];
-                controls[1]=actuators.output[1];
-                controls[2]=actuators.output[2];
-                controls[3]=actuators.output[3];
+                //gathering actuator_outputs data
+                controls[0]=(double)(actuators.output[0]-1000)/1000.0;
+                controls[1]=(double)(actuators.output[1]-1000)/1000.0;
+                controls[2]=(double)(actuators.output[2]-1000)/1000.0;
+                controls[3]=(double)(actuators.output[3]-1000)/1000.0;
             }
         }
 
@@ -322,25 +315,25 @@ void ReferenceMonitor::run(){
             yaw_angle= angleDataFusionYaw(y, u, R, Q, dt);
 
             sensors[0][0]=roll_angle.angle;
-            sensors[1][0]=roll_angle.angularSpeed;
-            sensors[2][0]=pitch_angle.angle;
-            sensors[3][0]=pitch_angle.angularSpeed;
-            sensors[4][0]=yaw_angle.angle;
+            sensors[1][0]=pitch_angle.angle;
+            sensors[2][0]=yaw_angle.angle;
+            sensors[3][0]=roll_angle.angularSpeed;
+            sensors[4][0]=pitch_angle.angularSpeed;
             sensors[5][0]=yaw_angle.angularSpeed;
             sensors[6][0]=correctedGPS[0];
             sensors[7][0]=correctedGPS[1];
             sensors[8][0]=correctedGPS[2];
         }
 
-        hrt_abstime endTimeDF = hrt_absolute_time();
-        PX4_ERR("ND DF: %llu us", endTimeDF-startTimeDF);
+        //hrt_abstime endTimeDF = hrt_absolute_time();
+        //PX4_ERR("ND DF: %llu us", endTimeDF-startTimeDF);
         if(actuators_updated){
-            hrt_abstime startTime = hrt_absolute_time();
+           // hrt_abstime startTime = hrt_absolute_time();
             EKF(sensors,controls,dt);
-            hrt_abstime endTime = hrt_absolute_time();
-            PX4_ERR("ND EKF: %llu us", endTime-startTime);
+            //hrt_abstime endTime = hrt_absolute_time();
+            //PX4_ERR("ND EKF: %llu us", endTime-startTime);
         }
-
+        //200,000 us equals 5Hz
         usleep(200000);
 
 
@@ -348,14 +341,9 @@ void ReferenceMonitor::run(){
     orb_unsubscribe(sensor_combined_sub);
     orb_unsubscribe(vehicle_magnetometer_sub);
     orb_unsubscribe(vehicle_gps_position_sub);
+    orb_unsubscribe(actuator_outputs_sub);
 }
 
-
-
-
-void EKF_CALL(double contr[4]){
-    EKF(sensors,contr,dt);
-}
 
 void ReferenceMonitor::parameters_update(int parameter_update_sub, bool force){
     bool updated;
