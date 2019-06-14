@@ -13,6 +13,9 @@
 #include <stdio.h>
 #include <px4_log.h>
 #include <drivers/drv_hrt.h>
+#include <fstream>
+#include <iomanip>
+std::fstream dataFile("residual.txt",std::ios::out);
 bool systemCompromised = false;
 //                currentGPS, GPSInitial, initialAlt, correctedGPS
 void llaTOxyz(double lla[3],double ll0[2],double alt, double * array){
@@ -443,7 +446,7 @@ void EKF(double sensors[9][1], double controls[4],double dt){
     CUSUM[8]= std::abs(estimated_states[8][0]-sensors[8][0]);
 
 
-
+/*
     PX4_ERR("DT: \%f",dt);
     PX4_ERR("Controls: \%f",controls[0]);
     PX4_ERR("Controls: \%f",controls[1]);
@@ -473,15 +476,28 @@ void EKF(double sensors[9][1], double controls[4],double dt){
     PX4_ERR("Estimated states: \%f",estimated_states[10][0]);
     PX4_ERR("Estimated states: \%f\n",estimated_states[11][0]);
 
-    PX4_ERR("Residual \%f",estimated_states[0][0]-sensors[0][0]);
-    PX4_ERR("Residual \%f",estimated_states[1][0]-sensors[1][0]);
-    PX4_ERR("Residual \%f",estimated_states[2][0]-sensors[2][0]);
-    PX4_ERR("Residual \%f",estimated_states[3][0]-sensors[3][0]);
-    PX4_ERR("Residual \%f",estimated_states[4][0]-sensors[4][0]);
-    PX4_ERR("Residual \%f",estimated_states[5][0]-sensors[5][0]);
-    PX4_ERR("Residual \%f",estimated_states[6][0]-sensors[6][0]);
-    PX4_ERR("Residual \%f",estimated_states[7][0]-sensors[7][0]);
-    PX4_ERR("Residual \%f\n",estimated_states[8][0]-sensors[8][0]);
+
+    */
+
+dataFile<<std::fixed<<std::setprecision(9)<<CUSUM[0]<<"\n";
+dataFile<<std::fixed<<std::setprecision(9)<<CUSUM[1]<<"\n";
+dataFile<<std::fixed<<std::setprecision(9)<<CUSUM[2]<<"\n";
+dataFile<<std::fixed<<std::setprecision(9)<<CUSUM[3]<<"\n";
+dataFile<<std::fixed<<std::setprecision(9)<<CUSUM[4]<<"\n";
+dataFile<<std::fixed<<std::setprecision(9)<<CUSUM[5]<<"\n";
+dataFile<<std::fixed<<std::setprecision(9)<<CUSUM[6]<<"\n";
+dataFile<<std::fixed<<std::setprecision(9)<<CUSUM[7]<<"\n";
+dataFile<<std::fixed<<std::setprecision(9)<<CUSUM[8]<<"\n\n";
+
+    PX4_ERR("Residual \%f",CUSUM[0]);
+    PX4_ERR("Residual \%f",CUSUM[1]);
+    PX4_ERR("Residual \%f",CUSUM[2]);
+    PX4_ERR("Residual \%f",CUSUM[3]);
+    PX4_ERR("Residual \%f",CUSUM[4]);
+    PX4_ERR("Residual \%f",CUSUM[5]);
+    PX4_ERR("Residual \%f",CUSUM[6]);
+    PX4_ERR("Residual \%f",CUSUM[7]);
+    PX4_ERR("Residual \%f\n",CUSUM[8]);
 
 
 
