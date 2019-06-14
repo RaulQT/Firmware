@@ -107,7 +107,7 @@ int ReferenceMonitor::task_spawn(int argc, char *argv[]){
     _task_id = px4_task_spawn_cmd("referenceMonitor",
                                   SCHED_DEFAULT,
                                   SCHED_PRIORITY_DEFAULT,
-                                  25000,                             //stack size
+                                  40000,                             //stack size
                                   (px4_main_t)&run_trampoline,      //entry
                                   (char *const *)argv);
 

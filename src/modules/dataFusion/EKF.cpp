@@ -53,14 +53,19 @@ void transforMinv(double angles[3],double Minv_out[3][3]){
     double  Minv[3][3]={1 ,sin(angles[0])*tan(angles[1]), cos(angles[0])*tan(angles[1]),
                         0,cos(angles[0]),-sin(angles[0]),
                         0,sin(angles[0])/cos(angles[1]), cos(angles[0])/cos(angles[1])};
+
+
     
     for(int i=0;i<3;i++)
-        for(int j=0;j<3;j++)
+        for(int j=0;j<3;j++){
             Minv_out[i][j]=Minv[i][j];
+            //PX4_ERR("tMIN %d %d : %f ",i,j,Minv[i][j]);
+        }
 }
 
 void update_estimated_states(double estimated_states[12][1],double dxangles[3][1],double dxangularspeeds[3],double dxposition[3],double dxvelocity[3],double KRes[12][1],double dt){
     double dx[12]={0,0,0,0,0,0,0,0,0,0,0,0};
+
     dx[0]=dxangles[0][0]+KRes[0][0];
     dx[1]=dxangles[1][0]+KRes[1][0];
     dx[2]=dxangles[2][0]+KRes[2][0];
@@ -69,13 +74,13 @@ void update_estimated_states(double estimated_states[12][1],double dxangles[3][1
     dx[4]=dxangularspeeds[1]+KRes[4][0];
     dx[5]=dxangularspeeds[2]+KRes[5][0];
     
-    dx[6]=dxposition[0]+KRes[6][0];
-    dx[7]=dxposition[1]+KRes[7][0];
-    dx[8]=dxposition[2]+KRes[8][0];
+    dx[6]=dxposition[0]+ KRes[6][0];
+    dx[7]=dxposition[1]+ KRes[7][0];
+    dx[8]=dxposition[2]+ KRes[8][0];
     
-    dx[9]=dxvelocity[0]+KRes[9][0];
-    dx[10]=dxvelocity[1]+KRes[10][0];
-    dx[11]=dxvelocity[2]+KRes[11][0];
+    dx[9]=dxvelocity[0]+ KRes[9][0];
+    dx[10]=dxvelocity[1]+ KRes[10][0];
+    dx[11]=dxvelocity[2]+ KRes[11][0];
     
     for(int i=0;i<12;i++)
         estimated_states[i][0]=estimated_states[i][0]+dt*dx[i];
@@ -90,25 +95,180 @@ void updateP(double Pdot[12][12],double P[12][12],double dt){
 
 void EKF(double sensors[9][1], double controls[4],double dt){
 
+    static int counter =0;
+    static double CUSUM[9];
+    PX4_ERR("ITERATION: \%d**************************************************************************",++counter);
     //static variables
-    static double P[12][12];
-    static double estimated_states[12][1];
+    //estimated_states[0][0] roll angle
+    //estimated_states[1][0] pitch angle
+    //estimated_states[2][0] yaw angle
+    //estimated_states[3][0] roll speed
+    //estimated_states[4][0] pitch speed
+    //estimated_states[5][0] yaw speed
+    //estimated_states[6][0] x
+    //estimated_states[7][0] y
+    //estimated_states[8][0] z
+    //estimated_states[9][0]  vx
+    //estimated_states[10][0] vy
+    //estimated_states[11][0] vz
+    static double estimated_states[12][1]={0,0,0,0,0,0,0,0,0,0,0,0};
 
-    double K1[12][9];
-    double Htrans[12][9];
-    double Rinv[9][9];//inverse of R
-    double K[12][9];
-    double FP[12][12];
-    double Ftrans[12][12];
-    double PFt[12][12];
-    double KH[12][12];
-    double KHP[12][12];
-    double Pdot[12][12];
-    double Pdot1[12][12];
-    double Pdot2[12][12];
-    double residuals[9][1];
-    double KRes[12][1];
-    double dxAngles[3][1];              //dynamics of the drone
+    double K1[12][9]={0,0,0,0,0,0,0,0,0,
+                      0,0,0,0,0,0,0,0,0,
+                      0,0,0,0,0,0,0,0,0,
+                      0,0,0,0,0,0,0,0,0,
+                      0,0,0,0,0,0,0,0,0,
+                      0,0,0,0,0,0,0,0,0,
+                      0,0,0,0,0,0,0,0,0,
+                      0,0,0,0,0,0,0,0,0,
+                      0,0,0,0,0,0,0,0,0,
+                      0,0,0,0,0,0,0,0,0,
+                      0,0,0,0,0,0,0,0,0,
+                      0,0,0,0,0,0,0,0,0};
+
+    double Htrans[12][9]={0,0,0,0,0,0,0,0,0,
+                          0,0,0,0,0,0,0,0,0,
+                          0,0,0,0,0,0,0,0,0,
+                          0,0,0,0,0,0,0,0,0,
+                          0,0,0,0,0,0,0,0,0,
+                          0,0,0,0,0,0,0,0,0,
+                          0,0,0,0,0,0,0,0,0,
+                          0,0,0,0,0,0,0,0,0,
+                          0,0,0,0,0,0,0,0,0,
+                          0,0,0,0,0,0,0,0,0,
+                          0,0,0,0,0,0,0,0,0,
+                          0,0,0,0,0,0,0,0,0};
+
+    double Rinv[9][9]={0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0};
+
+    double K[12][9]={0,0,0,0,0,0,0,0,0,
+                     0,0,0,0,0,0,0,0,0,
+                     0,0,0,0,0,0,0,0,0,
+                     0,0,0,0,0,0,0,0,0,
+                     0,0,0,0,0,0,0,0,0,
+                     0,0,0,0,0,0,0,0,0,
+                     0,0,0,0,0,0,0,0,0,
+                     0,0,0,0,0,0,0,0,0,
+                     0,0,0,0,0,0,0,0,0,
+                     0,0,0,0,0,0,0,0,0,
+                     0,0,0,0,0,0,0,0,0,
+                     0,0,0,0,0,0,0,0,0};
+
+    double FP[12][12]={0,0,0,0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,0,0,0};
+
+    double Ftrans[12][12]={0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0};
+
+    double PFt[12][12]={0,0,0,0,0,0,0,0,0,0,0,0,
+                        0,0,0,0,0,0,0,0,0,0,0,0,
+                        0,0,0,0,0,0,0,0,0,0,0,0,
+                        0,0,0,0,0,0,0,0,0,0,0,0,
+                        0,0,0,0,0,0,0,0,0,0,0,0,
+                        0,0,0,0,0,0,0,0,0,0,0,0,
+                        0,0,0,0,0,0,0,0,0,0,0,0,
+                        0,0,0,0,0,0,0,0,0,0,0,0,
+                        0,0,0,0,0,0,0,0,0,0,0,0,
+                        0,0,0,0,0,0,0,0,0,0,0,0,
+                        0,0,0,0,0,0,0,0,0,0,0,0,
+                        0,0,0,0,0,0,0,0,0,0,0,0};
+
+    double KH[12][12]={0,0,0,0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,0,0,0};
+
+    double KHP[12][12]={0,0,0,0,0,0,0,0,0,0,0,0,
+                        0,0,0,0,0,0,0,0,0,0,0,0,
+                        0,0,0,0,0,0,0,0,0,0,0,0,
+                        0,0,0,0,0,0,0,0,0,0,0,0,
+                        0,0,0,0,0,0,0,0,0,0,0,0,
+                        0,0,0,0,0,0,0,0,0,0,0,0,
+                        0,0,0,0,0,0,0,0,0,0,0,0,
+                        0,0,0,0,0,0,0,0,0,0,0,0,
+                        0,0,0,0,0,0,0,0,0,0,0,0,
+                        0,0,0,0,0,0,0,0,0,0,0,0,
+                        0,0,0,0,0,0,0,0,0,0,0,0,
+                        0,0,0,0,0,0,0,0,0,0,0,0};
+
+    double Pdot[12][12]={0,0,0,0,0,0,0,0,0,0,0,0,
+                         0,0,0,0,0,0,0,0,0,0,0,0,
+                         0,0,0,0,0,0,0,0,0,0,0,0,
+                         0,0,0,0,0,0,0,0,0,0,0,0,
+                         0,0,0,0,0,0,0,0,0,0,0,0,
+                         0,0,0,0,0,0,0,0,0,0,0,0,
+                         0,0,0,0,0,0,0,0,0,0,0,0,
+                         0,0,0,0,0,0,0,0,0,0,0,0,
+                         0,0,0,0,0,0,0,0,0,0,0,0,
+                         0,0,0,0,0,0,0,0,0,0,0,0,
+                         0,0,0,0,0,0,0,0,0,0,0,0,
+                         0,0,0,0,0,0,0,0,0,0,0,0};
+
+    double Pdot1[12][12]= {0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0};
+
+    double Pdot2[12][12] ={0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0,
+                           0,0,0,0,0,0,0,0,0,0,0,0};
+
+    double residuals[9][1]={0,0,0,0,0,0,0,0,0};
+    double KRes[12][1]= {0,0,0,0,0,0,0,0,0,0,0,0};
+    double dxAngles[3][1]={0,0,0};              //dynamics of the drone
     double dxAngularSpeed[3]={0,0,0};
     double dxPosition[3]={0,0,0};
     double dxVelocity[3]={0,0,0};
@@ -123,7 +283,7 @@ void EKF(double sensors[9][1], double controls[4],double dt){
                      0,0,0,0,0,0,0,1,0,0,0,0,
                      0,0,0,0,0,0,0,0,1,0,0,0};
 
-    double r=5;
+    double r=1;
     double R[9][9]={r,0,0,0,0,0,0,0,0,
                     0,r,0,0,0,0,0,0,0,
                     0,0,r,0,0,0,0,0,0,
@@ -134,7 +294,7 @@ void EKF(double sensors[9][1], double controls[4],double dt){
                     0,0,0,0,0,0,0,r,0,
                     0,0,0,0,0,0,0,0,r};
 
-    double q=.001;
+    double q=10;
     double Q[12][12]={q,0,0,0,0,0,0,0,0,0,0,0,
                       0,q,0,0,0,0,0,0,0,0,0,0,
                       0,0,q,0,0,0,0,0,0,0,0,0,
@@ -148,19 +308,36 @@ void EKF(double sensors[9][1], double controls[4],double dt){
                       0,0,0,0,0,0,0,0,0,0,q,0,
                       0,0,0,0,0,0,0,0,0,0,0,q};
 
+
+
+    double pq=.0001;
+    static double P[12][12]={ pq,0,0,0,0,0,0,0,0,0,0,0,
+                              0, pq,0,0,0,0,0,0,0,0,0,0,
+                              0,0, pq,0,0,0,0,0,0,0,0,0,
+                              0,0,0, pq,0,0,0,0,0,0,0,0,
+                              0,0,0,0, pq,0,0,0,0,0,0,0,
+                              0,0,0,0,0, pq,0,0,0,0,0,0,
+                              0,0,0,0,0,0, pq,0,0,0,0,0,
+                              0,0,0,0,0,0,0, pq,0,0,0,0,
+                              0,0,0,0,0,0,0,0, pq,0,0,0,
+                              0,0,0,0,0,0,0,0,0, pq,0,0,
+                              0,0,0,0,0,0,0,0,0,0, pq,0,
+                              0,0,0,0,0,0,0,0,0,0,0, pq};
+
     //variable initialization
     //constants
     double Ix=0.005;
     double Iy=0.005;
     double Iz=0.009;
-    double m=1.285;
-    double kd=0.43;
-    double dragf= 1.7e-6;
-    double thrustf=2e-6;
-    double control_bias=1200;
+    double m= 0.8; //1.285; drone
+    double kd=0;//0.027;
+    double dragf = 1e-6;//0.15;
+    double thrustf = 1e-6;//0.2;
+    double control_bias=0;
     double L=0.1905;
     double g=9.8;
-    T=thrustf*(controls[0]+controls[1]+controls[2]+controls[3]-4*control_bias);
+    T=4*(controls[0]+controls[1]+controls[2]+controls[3]-4*control_bias);//thrustf*...
+
 
     double F[12][12]={
         estimated_states[4][0]*cos(estimated_states[0][0])*tan(estimated_states[1][0])-estimated_states[5][0]*sin(estimated_states[0][0])*tan(estimated_states[1][0]), estimated_states[5][0]*cos(estimated_states[0][0])*(pow(tan(estimated_states[1][0]),2) + 1)+estimated_states[4][0]*sin(estimated_states[0][0])*(pow(tan(estimated_states[1][0]),2)+ 1), 0, 1, sin(estimated_states[0][0])*tan(estimated_states[1][0]), cos(estimated_states[0][0])*tan(estimated_states[1][0]), 0, 0, 0, 0, 0, 0,
@@ -188,17 +365,9 @@ void EKF(double sensors[9][1], double controls[4],double dt){
 
 
     double tau[3]={0,0,0};
-    double Minv[3][3]={0,0,0,
-                       0,0,0,
-                       0,0,0};
-    
-    double rotm[3][3]={0,0,0,
-                       0,0,0,
-                       0,0,0};
-
-    double TB[3][1]={0,
-                     0,
-                     0};
+    double Minv[3][3]={0,0,0,0,0,0,0,0,0};
+    double rotm[3][3]={0,0,0,0,0,0,0,0,0};
+    double TB[3][1]={0,0,0};
 
     inverseMatrix(R, Rinv);
     double angles[3]={estimated_states[0][0],estimated_states[1][0],estimated_states[2][0]};
@@ -210,13 +379,11 @@ void EKF(double sensors[9][1], double controls[4],double dt){
     eul2rotmat(angles, rotm);
 
 
-    tau[0] = L*thrustf*((controls[1]+controls[2]) - (controls[0]+controls[3]));
-    tau[1] = L*thrustf*((controls[0]+controls[1]) - (controls[2]+controls[3]));
-    tau[2] = L*dragf*((controls[0]+controls[2]) - (controls[1]+controls[3]));
+    tau[0] = L*thrustf*((controls[2]+controls[1]) - (controls[0]+controls[3]));//(controls[1] - controls[3]);
+    tau[1] = L*thrustf*((controls[0]+controls[2]) - (controls[1]+controls[3]));//(controls[2]-controls[0]);
+    tau[2] = L*dragf*((controls[0]+controls[1]) - (controls[2]+controls[3]));//((controls[0]+controls[1]) - (controls[2]+controls[3]));
 
-    double T2[3][1]={0,
-                     0,
-                     T};
+    double T2[3][1]={0,0,T};
 
     multiplyMatrices<3>(rotm, T2, TB);
     multiplyMatrices<3>(Minv, angularSpeed, dxAngles);
@@ -234,6 +401,7 @@ void EKF(double sensors[9][1], double controls[4],double dt){
 
     transposeMatrix(H, Htrans);
     transposeMatrix(F, Ftrans);
+
     multiplyMatrices<12>(P, Htrans, K1);
     multiplyMatrices<12>(K1, Rinv, K);
     multiplyMatrices<12>(F, P, FP);
@@ -243,17 +411,17 @@ void EKF(double sensors[9][1], double controls[4],double dt){
     addMatrices<12>(FP, PFt, Pdot1);
     subtractMatrices<12>(Pdot1, KHP, Pdot2);
     addMatrices<12>(Pdot2, Q, Pdot);
-    
-    subtractMatrices<9>(sensors, estimated_states, residuals);
-    multiplyMatrices<9>(K, residuals, KRes);
-    
 
+    subtractMatrices<9>(sensors, estimated_states, residuals);
+    multiplyMatrices<12>(K, residuals, KRes);
+    
     update_estimated_states(estimated_states,dxAngles,dxAngularSpeed,dxPosition,dxVelocity,KRes,dt);
 
-
-
-
     updateP(Pdot, P,dt);
+
+    //for(int i =0;i<12;i++)
+    //  for(int j =0;j<9;j++)
+    //    PX4_ERR("P[%d][%d]: %f",i,j,P[i][j]);
     
     if((estimated_states[8][0]<=0))
         estimated_states[8][0]=0;
@@ -264,12 +432,24 @@ void EKF(double sensors[9][1], double controls[4],double dt){
 
 
 
-    PX4_ERR("Sensors: \%f",controls[0]);
-    PX4_ERR("Sensors: \%f",controls[1]);
-    PX4_ERR("Sensors: \%f",controls[2]);
-    PX4_ERR("Sensors: \%f",controls[3]);
+    CUSUM[0]= std::abs(estimated_states[0][0]-sensors[0][0]);
+    CUSUM[1]= std::abs(estimated_states[1][0]-sensors[1][0]);
+    CUSUM[2]= std::abs(estimated_states[2][0]-sensors[2][0]);
+    CUSUM[3]= std::abs(estimated_states[3][0]-sensors[3][0]);
+    CUSUM[4]= std::abs(estimated_states[4][0]-sensors[4][0]);
+    CUSUM[5]= std::abs(estimated_states[5][0]-sensors[5][0]);
+    CUSUM[6]= std::abs(estimated_states[6][0]-sensors[6][0]);
+    CUSUM[7]= std::abs(estimated_states[7][0]-sensors[7][0]);
+    CUSUM[8]= std::abs(estimated_states[8][0]-sensors[8][0]);
 
-    /*
+
+
+    PX4_ERR("DT: \%f",dt);
+    PX4_ERR("Controls: \%f",controls[0]);
+    PX4_ERR("Controls: \%f",controls[1]);
+    PX4_ERR("Controls: \%f",controls[2]);
+    PX4_ERR("Controls: \%f\n",controls[3]);
+
     PX4_ERR("Sensors: \%f",sensors[0][0]);
     PX4_ERR("Sensors: \%f",sensors[1][0]);
     PX4_ERR("Sensors: \%f",sensors[2][0]);
@@ -293,7 +473,6 @@ void EKF(double sensors[9][1], double controls[4],double dt){
     PX4_ERR("Estimated states: \%f",estimated_states[10][0]);
     PX4_ERR("Estimated states: \%f\n",estimated_states[11][0]);
 
-
     PX4_ERR("Residual \%f",estimated_states[0][0]-sensors[0][0]);
     PX4_ERR("Residual \%f",estimated_states[1][0]-sensors[1][0]);
     PX4_ERR("Residual \%f",estimated_states[2][0]-sensors[2][0]);
@@ -303,9 +482,16 @@ void EKF(double sensors[9][1], double controls[4],double dt){
     PX4_ERR("Residual \%f",estimated_states[6][0]-sensors[6][0]);
     PX4_ERR("Residual \%f",estimated_states[7][0]-sensors[7][0]);
     PX4_ERR("Residual \%f\n",estimated_states[8][0]-sensors[8][0]);
-    */
 
 
+
+
+
+
+
+
+
+    PX4_ERR("***********************************************************************************");
 }//end of function
 
 bool attackDetected(){
