@@ -42,6 +42,7 @@ AngleInfo angleDataFusionPitch(double y, double u, double R, double Q [2][2], do
 AngleInfo angleDataFusionYaw(double y, double u, double R, double Q [2][2], double dt);
 
 //EKF
+bool attackDetected();
 void EKF_CALL(double contr[4]);
 void EKF(double sensors[9][1], double controls[4],double dt);
 void EKF_Fk(double x[12][1],   double Ix, double Iy, double Iz,  double T, double m,  double kd, double Fk[12][12]);

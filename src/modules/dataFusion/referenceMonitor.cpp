@@ -50,6 +50,9 @@
 #include <uORB/topics/vehicle_gps_position.h>
 #include <uORB/topics/actuator_outputs.h>
 #include <drivers/drv_hrt.h>
+#include <fstream>
+std::fstream dataFile("DF_time.txt",std::ios::out);
+std::fstream dataFile2("EKF_time.txt",std::ios::out);
 
 int ReferenceMonitor::print_usage(const char *reason){
     if (reason) {
@@ -220,7 +223,7 @@ void ReferenceMonitor::run(){
 
         int x;
         int poll_ret = px4_poll(fds, sizeof(fds)/sizeof(fds[0]), 1000);
-        //hrt_abstime startTimeDF = hrt_absolute_time();
+        hrt_abstime startTimeDF = hrt_absolute_time();
 
         if(!(fds[0].revents & POLLIN)){
             //no new data
@@ -325,12 +328,14 @@ void ReferenceMonitor::run(){
             sensors[8][0]=correctedGPS[2];
         }
 
-        //hrt_abstime endTimeDF = hrt_absolute_time();
+        hrt_abstime endTimeDF = hrt_absolute_time();
+        dataFile<<"ND_DF: "<<endTimeDF-startTimeDF<<"\n";
         //PX4_ERR("ND DF: %llu us", endTimeDF-startTimeDF);
         if(actuators_updated){
-           // hrt_abstime startTime = hrt_absolute_time();
+           hrt_abstime startTime = hrt_absolute_time();
             EKF(sensors,controls,dt);
-            //hrt_abstime endTime = hrt_absolute_time();
+            hrt_abstime endTime = hrt_absolute_time();
+            dataFile2<<"ND_EKF: "<<endTime-startTime<<"\n";
             //PX4_ERR("ND EKF: %llu us", endTime-startTime);
         }
         //200,000 us equals 5Hz

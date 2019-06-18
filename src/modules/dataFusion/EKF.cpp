@@ -15,7 +15,31 @@
 #include <drivers/drv_hrt.h>
 #include <fstream>
 #include <iomanip>
-std::fstream dataFile("residual.txt",std::ios::out);
+static double CUSUM[9]={0,0,0,0,0,0,0,0,0};
+
+//average value for each sensor of the 9 sensors
+double b[9]={0.00976221 + .04,
+             0.027288   + .15,
+             0.0312406  + .3,
+             0.00789276 + .1,
+             0.0156441  +.15,
+             0.0199566  +.2,
+             0.220957   +.8,
+             0.292812   + 1,
+             0.0619515  +.3};
+
+//threshhold
+double threshold[9]={1.00976221,
+                     1.027288,
+                     1.0312406,
+                     1.00789276,
+                     1.0156441,
+                     1.0199566,
+                     1.220957,
+                     1.292812,
+                     5.0619515};
+
+//std::fstream dataFile("residual.txt",std::ios::out);
 bool systemCompromised = false;
 //                currentGPS, GPSInitial, initialAlt, correctedGPS
 void llaTOxyz(double lla[3],double ll0[2],double alt, double * array){
@@ -40,6 +64,7 @@ void llaTOxyz(double lla[3],double ll0[2],double alt, double * array){
     array[2] =-lla[2]-alt;
 
 }
+void cusum(double residual[9]);
 // Rotation matrix
 void eul2rotmat(double angles[3],double rotmatrix[3][3]){
     double R2[3][3]={cos(angles[1])*cos(angles[2]), sin(angles[0])*sin(angles[1])*cos(angles[2])-cos(angles[0])*sin(angles[2]), cos(angles[0])*sin(angles[1])*cos(angles[2])+sin(angles[0])*sin(angles[2]),
@@ -66,6 +91,30 @@ void transforMinv(double angles[3],double Minv_out[3][3]){
         }
 }
 
+
+
+
+void cusum(double residual[9]){
+
+    for(int i =0;i<9;i++){
+        if(CUSUM[i]+residual[i]-b[i]<0)
+            CUSUM[i]=0;
+        else
+            CUSUM[i]+=(residual[i]-b[i]);
+    }
+
+    for(int i=0;i<9;i++){
+        if(CUSUM[i]>threshold[i])
+            systemCompromised = true;
+    }
+
+
+    for(int i=0;i<9;i++)
+        PX4_ERR("CUSUM: %f", CUSUM[i]);
+
+
+
+}
 void update_estimated_states(double estimated_states[12][1],double dxangles[3][1],double dxangularspeeds[3],double dxposition[3],double dxvelocity[3],double KRes[12][1],double dt){
     double dx[12]={0,0,0,0,0,0,0,0,0,0,0,0};
 
@@ -99,7 +148,7 @@ void updateP(double Pdot[12][12],double P[12][12],double dt){
 void EKF(double sensors[9][1], double controls[4],double dt){
 
     static int counter =0;
-    static double CUSUM[9];
+    double residual[9]={0,0,0,0,0,0,0,0,0};
     PX4_ERR("ITERATION: \%d**************************************************************************",++counter);
     //static variables
     //estimated_states[0][0] roll angle
@@ -421,10 +470,6 @@ void EKF(double sensors[9][1], double controls[4],double dt){
     update_estimated_states(estimated_states,dxAngles,dxAngularSpeed,dxPosition,dxVelocity,KRes,dt);
 
     updateP(Pdot, P,dt);
-
-    //for(int i =0;i<12;i++)
-    //  for(int j =0;j<9;j++)
-    //    PX4_ERR("P[%d][%d]: %f",i,j,P[i][j]);
     
     if((estimated_states[8][0]<=0))
         estimated_states[8][0]=0;
@@ -435,83 +480,24 @@ void EKF(double sensors[9][1], double controls[4],double dt){
 
 
 
-    CUSUM[0]= std::abs(estimated_states[0][0]-sensors[0][0]);
-    CUSUM[1]= std::abs(estimated_states[1][0]-sensors[1][0]);
-    CUSUM[2]= std::abs(estimated_states[2][0]-sensors[2][0]);
-    CUSUM[3]= std::abs(estimated_states[3][0]-sensors[3][0]);
-    CUSUM[4]= std::abs(estimated_states[4][0]-sensors[4][0]);
-    CUSUM[5]= std::abs(estimated_states[5][0]-sensors[5][0]);
-    CUSUM[6]= std::abs(estimated_states[6][0]-sensors[6][0]);
-    CUSUM[7]= std::abs(estimated_states[7][0]-sensors[7][0]);
-    CUSUM[8]= std::abs(estimated_states[8][0]-sensors[8][0]);
+    residual[0]= std::abs(estimated_states[0][0]-sensors[0][0]);
+    residual[1]= std::abs(estimated_states[1][0]-sensors[1][0]);
+    residual[2]= std::abs(estimated_states[2][0]-sensors[2][0]);
+    residual[3]= std::abs(estimated_states[3][0]-sensors[3][0]);
+    residual[4]= std::abs(estimated_states[4][0]-sensors[4][0]);
+    residual[5]= std::abs(estimated_states[5][0]-sensors[5][0]);
+    residual[6]= std::abs(estimated_states[6][0]-sensors[6][0]);
+    residual[7]= std::abs(estimated_states[7][0]-sensors[7][0]);
+    residual[8]= std::abs(estimated_states[8][0]-sensors[8][0]);
+
+    cusum(residual);
 
 
-/*
-    PX4_ERR("DT: \%f",dt);
-    PX4_ERR("Controls: \%f",controls[0]);
-    PX4_ERR("Controls: \%f",controls[1]);
-    PX4_ERR("Controls: \%f",controls[2]);
-    PX4_ERR("Controls: \%f\n",controls[3]);
-
-    PX4_ERR("Sensors: \%f",sensors[0][0]);
-    PX4_ERR("Sensors: \%f",sensors[1][0]);
-    PX4_ERR("Sensors: \%f",sensors[2][0]);
-    PX4_ERR("Sensors: \%f",sensors[3][0]);
-    PX4_ERR("Sensors: \%f",sensors[4][0]);
-    PX4_ERR("Sensors: \%f",sensors[5][0]);
-    PX4_ERR("Sensors: \%f",sensors[6][0]);
-    PX4_ERR("Sensors: \%f",sensors[7][0]);
-    PX4_ERR("Sensors: \%f\n",sensors[8][0]);
-
-    PX4_ERR("Estimated states: \%f",estimated_states[0][0]);
-    PX4_ERR("Estimated states: \%f",estimated_states[1][0]);
-    PX4_ERR("Estimated states: \%f",estimated_states[2][0]);
-    PX4_ERR("Estimated states: \%f",estimated_states[3][0]);
-    PX4_ERR("Estimated states: \%f",estimated_states[4][0]);
-    PX4_ERR("Estimated states: \%f",estimated_states[5][0]);
-    PX4_ERR("Estimated states: \%f",estimated_states[6][0]);
-    PX4_ERR("Estimated states: \%f",estimated_states[7][0]);
-    PX4_ERR("Estimated states: \%f",estimated_states[8][0]);
-    PX4_ERR("Estimated states: \%f",estimated_states[9][0]);
-    PX4_ERR("Estimated states: \%f",estimated_states[10][0]);
-    PX4_ERR("Estimated states: \%f\n",estimated_states[11][0]);
-
-
-    */
-
-dataFile<<std::fixed<<std::setprecision(9)<<CUSUM[0]<<"\n";
-dataFile<<std::fixed<<std::setprecision(9)<<CUSUM[1]<<"\n";
-dataFile<<std::fixed<<std::setprecision(9)<<CUSUM[2]<<"\n";
-dataFile<<std::fixed<<std::setprecision(9)<<CUSUM[3]<<"\n";
-dataFile<<std::fixed<<std::setprecision(9)<<CUSUM[4]<<"\n";
-dataFile<<std::fixed<<std::setprecision(9)<<CUSUM[5]<<"\n";
-dataFile<<std::fixed<<std::setprecision(9)<<CUSUM[6]<<"\n";
-dataFile<<std::fixed<<std::setprecision(9)<<CUSUM[7]<<"\n";
-dataFile<<std::fixed<<std::setprecision(9)<<CUSUM[8]<<"\n\n";
-
-    PX4_ERR("Residual \%f",CUSUM[0]);
-    PX4_ERR("Residual \%f",CUSUM[1]);
-    PX4_ERR("Residual \%f",CUSUM[2]);
-    PX4_ERR("Residual \%f",CUSUM[3]);
-    PX4_ERR("Residual \%f",CUSUM[4]);
-    PX4_ERR("Residual \%f",CUSUM[5]);
-    PX4_ERR("Residual \%f",CUSUM[6]);
-    PX4_ERR("Residual \%f",CUSUM[7]);
-    PX4_ERR("Residual \%f\n",CUSUM[8]);
-
-
-
-
-
-
-
-
-
-    PX4_ERR("***********************************************************************************");
 }//end of function
 
+
 bool attackDetected(){
-    return false;
+    return systemCompromised;
 }
 
 
