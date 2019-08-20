@@ -13,8 +13,9 @@
 #include <stdio.h>
 #include <px4_log.h>
 #include <drivers/drv_hrt.h>
-#include <fstream>
-#include <iomanip>
+//#include <fstream>
+//clear
+//#include <iomanip>
 static double CUSUM[9]={0,0,0,0,0,0,0,0,0};
 
 //average value for each sensor of the 9 sensors
@@ -147,9 +148,9 @@ void updateP(double Pdot[12][12],double P[12][12],double dt){
 
 void EKF(double sensors[9][1], double controls[4],double dt){
 
-    static int counter =0;
+    //static int counter =0;
     double residual[9]={0,0,0,0,0,0,0,0,0};
-    PX4_ERR("ITERATION: \%d**************************************************************************",++counter);
+    //PX4_ERR("ITERATION: \%d**************************************************************************",++counter);
     //static variables
     //estimated_states[0][0] roll angle
     //estimated_states[1][0] pitch angle
